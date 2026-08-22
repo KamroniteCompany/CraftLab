@@ -1,8 +1,8 @@
 {
   "modId": "communitytest",
   "name": "CommunityTest",
-  "author": "TonNom",
-  "description": "Mod de test pour CraftLab.",
+  "author": "Lakabru",
+  "description": "Mod principal de CraftLab.",
   "minecraftVersion": "1.21.1",
   "loader": "forge"
 }
