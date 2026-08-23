@@ -181,7 +181,16 @@ public class GitHubService {
         String contentType = obj.has("content_type") && !obj.get("content_type").isJsonNull()
             ? obj.get("content_type").getAsString() : null;
         String downloadUrl = obj.get("browser_download_url").getAsString();
-        return new GitHubAsset(name, size, contentType, downloadUrl);
+
+        String sha256Digest = null;
+        if (obj.has("digest") && !obj.get("digest").isJsonNull()) {
+            String digest = obj.get("digest").getAsString();
+            if (digest.startsWith("sha256:")) {
+                sha256Digest = digest.substring("sha256:".length());
+            }
+        }
+
+        return new GitHubAsset(name, size, contentType, downloadUrl, sha256Digest);
     }
 
     private <T> T getFresh(Map<String, CacheEntry<T>> cache, String key) {

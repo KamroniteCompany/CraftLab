@@ -1,0 +1,104 @@
+package com.communityserver.communitytest.download;
+
+import java.io.IOException;
+import java.io.OutputStream;
+import java.net.http.HttpResponse;
+import java.nio.ByteBuffer;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.Flow;
+import java.util.concurrent.atomic.AtomicLong;
+
+/**
+ * Écrit le corps de la réponse HTTP dans un fichier temporaire, en interrompant le flux dès
+ * que la taille cumulée dépasse maxBytes — sans jamais accumuler l'intégralité du corps en
+ * mémoire, et sans faire confiance au seul en-tête Content-Length (qui peut être absent ou
+ * mensonger) : c'est le flux réel, octet par octet, qui est mesuré et borné.
+ */
+final class SizeLimitedFileBodySubscriber implements HttpResponse.BodySubscriber<Path> {
+
+    private final Path targetPath;
+    private final long maxBytes;
+    private final CompletableFuture<Path> result = new CompletableFuture<>();
+    private final AtomicLong written = new AtomicLong(0);
+    private volatile OutputStream out;
+    private volatile Flow.Subscription subscription;
+
+    SizeLimitedFileBodySubscriber(Path targetPath, long maxBytes) {
+        this.targetPath = targetPath;
+        this.maxBytes = maxBytes;
+    }
+
+    @Override
+    public CompletionStage<Path> getBody() {
+        return result;
+    }
+
+    @Override
+    public void onSubscribe(Flow.Subscription subscription) {
+        this.subscription = subscription;
+        try {
+            out = Files.newOutputStream(targetPath,
+                StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
+        } catch (IOException e) {
+            subscription.cancel();
+            result.completeExceptionally(e);
+            return;
+        }
+        subscription.request(Long.MAX_VALUE);
+    }
+
+    @Override
+    public void onNext(List<ByteBuffer> items) {
+        try {
+            for (ByteBuffer buffer : items) {
+                int remaining = buffer.remaining();
+                if (written.addAndGet(remaining) > maxBytes) {
+                    closeQuietly();
+                    subscription.cancel();
+                    result.completeExceptionally(new DownloadTooLargeException(maxBytes));
+                    return;
+                }
+                byte[] bytes = new byte[remaining];
+                buffer.get(bytes);
+                out.write(bytes);
+            }
+        } catch (IOException e) {
+            closeQuietly();
+            subscription.cancel();
+            result.completeExceptionally(e);
+        }
+    }
+
+    @Override
+    public void onError(Throwable throwable) {
+        closeQuietly();
+        result.completeExceptionally(throwable);
+    }
+
+    @Override
+    public void onComplete() {
+        try {
+            if (out != null) {
+                out.close();
+            }
+            result.complete(targetPath);
+        } catch (IOException e) {
+            result.completeExceptionally(e);
+        }
+    }
+
+    private void closeQuietly() {
+        try {
+            if (out != null) {
+                out.close();
+            }
+        } catch (IOException ignored) {
+            // Le fichier .part résiduel sera nettoyé par l'appelant en cas d'échec.
+        }
+    }
+}

@@ -142,7 +142,8 @@ public class ModStorage {
             getString(releaseObj, "tag", null),
             releaseObj.has("releaseId") ? releaseObj.get("releaseId").getAsLong() : 0L,
             getString(releaseObj, "assetName", null),
-            getString(releaseObj, "assetDownloadUrl", null)
+            getString(releaseObj, "assetDownloadUrl", null),
+            getString(releaseObj, "expectedSha256", null)
         );
     }
 
@@ -155,6 +156,9 @@ public class ModStorage {
         releaseObj.addProperty("releaseId", release.getReleaseId());
         releaseObj.addProperty("assetName", release.getAssetName());
         releaseObj.addProperty("assetDownloadUrl", release.getAssetDownloadUrl());
+        if (release.getExpectedSha256() != null) {
+            releaseObj.addProperty("expectedSha256", release.getExpectedSha256());
+        }
         obj.add("release", releaseObj);
     }
 

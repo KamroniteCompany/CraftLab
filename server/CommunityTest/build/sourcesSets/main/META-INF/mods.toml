@@ -1,0 +1,26 @@
+modLoader="javafml"
+loaderVersion="[0,)"
+license="MIT"
+issueTrackerURL="https://github.com/toncompte/CommunityTest/issues"
+showAsResourcePack=false
+
+[[mods]]
+modId="communitytest"
+version="1.0.0"
+displayName="CommunityTest"
+authors="CommunityTest Team"
+description='''Mod de dÃ©monstration du serveur communautaire : proposition, test et vote des mods.'''
+
+[[dependencies.communitytest]]
+    modId="forge"
+    mandatory=true
+    versionRange="[0,)"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.communitytest]]
+    modId="minecraft"
+    mandatory=true
+    versionRange="[1.21.1,1.22)"
+    ordering="NONE"
+    side="BOTH"

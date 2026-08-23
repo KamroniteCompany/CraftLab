@@ -119,7 +119,7 @@ public final class GitHubModImporter {
             status
         );
         mod.setSource(new ModSource(ModSource.TYPE_GITHUB, repository.owner(), repository.name(), repository.htmlUrl()));
-        mod.setRelease(new ModReleaseInfo(release.tag(), release.id(), jar.name(), jar.downloadUrl()));
+        mod.setRelease(new ModReleaseInfo(release.tag(), release.id(), jar.name(), jar.downloadUrl(), jar.sha256Digest()));
 
         // ModRegistry est thread-safe (méthodes synchronized) : l'écriture peut se faire ici,
         // sur le thread HTTP GitHub. Seul l'envoi du message en jeu doit repasser par le thread
