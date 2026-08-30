@@ -18,7 +18,32 @@
 *.zip
 *.tar.gz
 *.rar
+# Exception : le Gradle Wrapper doit toujours être versionné (requis par gradlew/gradlew.bat
+# sur un clone neuf, avant qu'aucun autre JAR ne puisse être téléchargé).
+!**/gradle/wrapper/gradle-wrapper.jar
 
 # virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
 hs_err_pid*
 replay_pid*
+
+# Sorties de build Gradle (régénérées par ./gradlew build) et cache local Gradle
+**/build/
+**/.gradle/
+
+# IntelliJ IDEA (métadonnées locales à l'IDE, régénérées via "Reload Gradle Project")
+**/.idea/
+*.iml
+
+# Bac à sable de développement Forge (régénéré par ./gradlew runServer / runClient :
+# monde, logs, configs auto-générées, historique de commandes, bans/whitelist de test, etc.)
+server/*/run/
+
+# Données locales/instance du launcher, au cas où elles seraient un jour générées à
+# l'intérieur du dépôt (normalement écrites hors dépôt, sous %APPDATA%\CraftLabLauncher\)
+launcher/*/instances/
+launcher/*/downloads/
+launcher/*/logs/
+
+# Windows
+Thumbs.db
+desktop.ini

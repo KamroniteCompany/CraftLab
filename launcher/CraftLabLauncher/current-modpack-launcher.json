@@ -1,0 +1,16 @@
+{
+  "minecraftVersion": "1.21.1",
+  "forgeVersion": "52.1.0",
+  "generation": 1,
+  "mods": [
+    {
+      "modId": "blankmod",
+      "name": "BlankMod",
+      "version": "1.0.0",
+      "assetName": "blankmod-1.0.0.jar",
+      "sha256": "REMPLACE_PAR_LE_VRAI_SHA256_DU_JAR",
+      "size": 0,
+      "downloadUrl": "https://github.com/TON_USER/BlankMod/releases/download/v1.0.0/blankmod-1.0.0.jar"
+    }
+  ]
+}

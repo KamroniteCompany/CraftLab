@@ -1,0 +1,33 @@
+plugins {
+    id 'application'
+    id 'org.openjfx.javafxplugin' version '0.1.0'
+}
+
+group = 'com.craftlab'
+version = '0.1.0'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+javafx {
+    version = '21.0.4'
+    modules = ['javafx.controls']
+}
+
+application {
+    mainClass = 'com.craftlab.launcher.CraftLabLauncherApp'
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // Même bibliothèque JSON que le serveur CraftLab, pour rester cohérent — mais ici en
+    // dépendance explicite : ce projet n'est plus un mod Forge, Gson n'est pas fourni
+    // transitivement par Minecraft.
+    implementation 'com.google.code.gson:gson:2.11.0'
+}

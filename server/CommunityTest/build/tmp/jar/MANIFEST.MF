@@ -1,8 +1,0 @@
-Manifest-Version: 1.0
-Specification-Title: communitytest
-Specification-Vendor: CommunityTest Team
-Specification-Version: 1
-Implementation-Title: CommunityTest
-Implementation-Version: 1.0.0
-Implementation-Vendor: CommunityTest Team
-
