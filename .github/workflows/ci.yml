@@ -1,0 +1,102 @@
+name: CI
+
+# Valide chaque push sur main et chaque pull request : build + tests de CraftLabCore et du
+# launcher, plus un garde-fou sur le format/les valeurs des versions déclarées. Ne construit
+# jamais d'installeur, ne publie jamais de Release, ne touche jamais au serveur réel ou au
+# ModPack — voir .github/workflows/release-craftlabcore.yml pour le pipeline de publication.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  server:
+    name: CraftLabCore (build + tests)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Vérifier les versions figées (Minecraft 1.21.1 / Forge 52.1.0) et le format de mod_version
+        working-directory: server/CraftLabCore
+        run: |
+          MINECRAFT_VERSION=$(grep '^minecraft_version=' gradle.properties | cut -d= -f2)
+          FORGE_VERSION=$(grep '^forge_version=' gradle.properties | cut -d= -f2)
+          MOD_VERSION=$(grep '^mod_version=' gradle.properties | cut -d= -f2)
+          echo "minecraft_version=$MINECRAFT_VERSION forge_version=$FORGE_VERSION mod_version=$MOD_VERSION"
+
+          if [ "$MINECRAFT_VERSION" != "1.21.1" ]; then
+            echo "::error::minecraft_version attendu '1.21.1', trouvé '$MINECRAFT_VERSION'. Un changement de version Minecraft doit être une décision explicite, pas un effet de bord."
+            exit 1
+          fi
+          if [ "$FORGE_VERSION" != "52.1.0" ]; then
+            echo "::error::forge_version attendu '52.1.0', trouvé '$FORGE_VERSION'. Un changement de version Forge doit être une décision explicite, pas un effet de bord."
+            exit 1
+          fi
+          if ! echo "$MOD_VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::mod_version '$MOD_VERSION' ne suit pas le format X.Y.Z (voir docs/versioning.md)."
+            exit 1
+          fi
+
+      - name: Build + tests
+        working-directory: server/CraftLabCore
+        run: ./gradlew.bat clean build --console=plain
+
+      - name: Publier les résultats de tests
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: craftlabcore-test-results
+          path: server/CraftLabCore/build/reports/tests/test
+          if-no-files-found: warn
+
+  launcher:
+    name: CraftLab Launcher (build + tests)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Vérifier le format de la version du launcher
+        working-directory: launcher/CraftLabLauncher
+        run: |
+          LAUNCHER_VERSION=$(grep "^version = " build.gradle | sed "s/version = '\(.*\)'/\1/")
+          echo "launcher version=$LAUNCHER_VERSION"
+          if ! echo "$LAUNCHER_VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::La version du launcher '$LAUNCHER_VERSION' ne suit pas le format X.Y.Z (voir docs/versioning.md)."
+            exit 1
+          fi
+
+      - name: Build + tests
+        working-directory: launcher/CraftLabLauncher
+        run: ./gradlew.bat clean build --console=plain
+
+      - name: Publier les résultats de tests
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: launcher-test-results
+          path: launcher/CraftLabLauncher/build/reports/tests/test
+          if-no-files-found: warn

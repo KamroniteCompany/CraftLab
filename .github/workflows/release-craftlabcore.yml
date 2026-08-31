@@ -1,0 +1,135 @@
+name: Release CraftLabCore
+
+# Déclenché uniquement par un tag vX.Y.Z poussé (JAMAIS par un push sur une branche) — voir
+# docs/versioning.md pour la procédure complète (bump -> commit -> tag sur ce commit exact ->
+# ce workflow). Le préfixe "v" sans autre préfixe distingue ces tags de ceux du launcher
+# (launcher-vX.Y.Z, voir launcher/CraftLabLauncher/docs/releasing.md) dans ce même monorepo.
+#
+# Ce que ce workflow fait : build reproductible depuis un checkout exact du tag, vérifie que le
+# tag/le code source/le JAR produit s'accordent tous sur le même numéro de version (empêche
+# structurellement l'incident déjà rencontré : v1.0.1 avait été tagué sur un commit dont le code
+# déclarait encore 1.0.0), puis publie une Release GitHub avec le JAR en asset — mais seulement
+# si aucune Release n'existe déjà pour ce tag.
+#
+# Ce que ce workflow ne fait JAMAIS : toucher au serveur réel, modifier ModRegistry/ModPack ou
+# CURRENT, contourner le vote communautaire, déplacer un tag existant, ou écraser une Release
+# déjà publiée. La détection de cette nouvelle Release et son intégration au ModPack restent
+# entièrement gérées côté serveur par GitHubRefreshScheduler / /mod github refresh, décision
+# humaine à chaque étape (/modpack prepare, /modpack apply) — voir docs/modpack-update-procedure.md.
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write # requis pour publier une Release et son asset
+
+jobs:
+  release:
+    name: Build, verify, and publish
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout exact du tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Vérifier tag == mod_version (source)
+        id: version
+        working-directory: server/CraftLabCore
+        run: |
+          TAG="$GITHUB_REF_NAME"
+          TAG_VERSION="${TAG#v}"
+          SOURCE_VERSION=$(grep '^mod_version=' gradle.properties | cut -d= -f2)
+          MINECRAFT_VERSION=$(grep '^minecraft_version=' gradle.properties | cut -d= -f2)
+          FORGE_VERSION=$(grep '^forge_version=' gradle.properties | cut -d= -f2)
+          echo "tag=$TAG tag_version=$TAG_VERSION mod_version_source=$SOURCE_VERSION"
+
+          if [ "$TAG_VERSION" != "$SOURCE_VERSION" ]; then
+            echo "::error::Incohérence tag/version : le tag '$TAG' implique la version '$TAG_VERSION', mais gradle.properties déclare mod_version='$SOURCE_VERSION'. Le code de ce commit ne correspond pas à ce que le tag annonce — voir docs/versioning.md. Ce workflow s'arrête volontairement sans rien publier."
+            exit 1
+          fi
+          if [ "$MINECRAFT_VERSION" != "1.21.1" ]; then
+            echo "::error::minecraft_version attendu '1.21.1', trouvé '$MINECRAFT_VERSION' au commit de ce tag."
+            exit 1
+          fi
+          if [ "$FORGE_VERSION" != "52.1.0" ]; then
+            echo "::error::forge_version attendu '52.1.0', trouvé '$FORGE_VERSION' au commit de ce tag."
+            exit 1
+          fi
+
+          echo "version=$SOURCE_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Vérifier qu'aucune Release n'existe déjà pour ce tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "::error::Une Release existe déjà pour le tag '$GITHUB_REF_NAME'. Ce workflow ne recrée et n'écrase jamais une Release existante — une modification de v1.0.0/v1.0.1 ou de toute autre Release publiée nécessite une action manuelle explicite et confirmée, jamais automatique."
+            exit 1
+          fi
+          echo "Aucune Release existante pour $GITHUB_REF_NAME — la publication peut continuer."
+
+      - name: Build + tests (checkout propre du tag)
+        working-directory: server/CraftLabCore
+        run: ./gradlew.bat clean build --console=plain
+
+      - name: Vérifier le JAR produit (présence, nom, version dans mods.toml)
+        id: jar
+        working-directory: server/CraftLabCore
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          JAR_PATH="build/libs/craftlabcore-${VERSION}.jar"
+
+          if [ ! -f "$JAR_PATH" ]; then
+            echo "::error::JAR attendu introuvable : $JAR_PATH"
+            ls -la build/libs/ || true
+            exit 1
+          fi
+
+          MODS_TOML_VERSION=$(unzip -p "$JAR_PATH" META-INF/mods.toml | grep '^version=' | head -1 | sed 's/version="\(.*\)"/\1/')
+          if [ "$MODS_TOML_VERSION" != "$VERSION" ]; then
+            echo "::error::Le JAR généré déclare version='$MODS_TOML_VERSION' dans son mods.toml, attendu '$VERSION' (tag/source). Le JAR ne correspond pas à ce qu'il devrait être — publication annulée."
+            exit 1
+          fi
+
+          SHA256=$(sha256sum "$JAR_PATH" | cut -d' ' -f1)
+          echo "JAR: $JAR_PATH"
+          echo "SHA-256 (calculé localement, à titre indicatif — le digest fait foi côté GitHub) : $SHA256"
+
+          echo "jar_path=$(pwd)/$JAR_PATH" >> "$GITHUB_OUTPUT"
+          echo "jar_name=craftlabcore-${VERSION}.jar" >> "$GITHUB_OUTPUT"
+
+      - name: Publier la Release GitHub
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" "${{ steps.jar.outputs.jar_path }}" \
+            --repo "${{ github.repository }}" \
+            --title "CraftLabCore ${{ steps.version.outputs.version }}" \
+            --generate-notes
+
+      - name: Résumé
+        run: |
+          {
+            echo "### Release publiée"
+            echo ""
+            echo "- Tag : \`$GITHUB_REF_NAME\`"
+            echo "- Version : \`${{ steps.version.outputs.version }}\`"
+            echo "- Asset : \`${{ steps.jar.outputs.jar_name }}\`"
+            echo ""
+            echo "Rien n'a été modifié sur le serveur réel ni sur le ModPack : la détection de"
+            echo "cette release et son import restent gérés manuellement côté serveur"
+            echo "(\`/mod github refresh\`, puis \`/modpack diff\`/\`/modpack apply\`)."
+          } >> "$GITHUB_STEP_SUMMARY"
