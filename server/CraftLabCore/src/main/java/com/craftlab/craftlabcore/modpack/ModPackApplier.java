@@ -102,7 +102,9 @@ public final class ModPackApplier {
         ModPack next = manager.getNext();
 
         LOGGER.info(LOG_PREFIX + "Current ModPack: v" + current.getGeneration());
-        LOGGER.info(LOG_PREFIX + "Next ModPack: v" + next.getGeneration());
+        // NEXT n'a pas de compteur de génération qui lui soit propre (voir docs/modpack-lifecycle.md,
+        // section "Génération") : la génération qu'il prendra à la promotion est toujours current+1.
+        LOGGER.info(LOG_PREFIX + "Next ModPack: v" + (current.getGeneration() + 1));
 
         if (current.getMods().isEmpty() && next.getMods().isEmpty()) {
             return ApplyResult.alreadyUpToDate();

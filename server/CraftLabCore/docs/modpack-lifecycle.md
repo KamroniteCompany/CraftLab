@@ -118,6 +118,24 @@ rollback.
   **renommage** d'un fichier ouvert même quand son remplacement de contenu est refusé, donc
   l'ancien fichier est déplacé hors du chemin final avant que le nouveau n'y soit installé.
 
+## Génération
+
+`ModPack.generation` est un compteur qui n'a de sens que pour **CURRENT** : il représente le
+nombre de promotions (`/modpack apply` réussis) depuis l'origine, et sert uniquement à
+l'affichage (`/modpack status`, logs). Il est incrémenté dans
+`ModPackManager.promoteNextToCurrent()` (`current.generation + 1`) au moment exact où NEXT
+devient CURRENT.
+
+**NEXT n'a volontairement pas son propre compteur de génération.** Le champ `generation` existe
+sur l'objet `ModPack` par symétrie de format de sérialisation, mais NEXT n'a aucune notion
+indépendante de "sa" génération : la seule valeur qui aurait un sens (celle que NEXT prendra
+une fois promu) est déjà entièrement dérivable de `current.getGeneration() + 1`, sans avoir
+besoin d'être stockée séparément. En pratique, `next-modpack.json` conserve donc en permanence
+`"generation": 0` (valeur par défaut du constructeur, jamais réassignée) — ce n'est pas un bug,
+c'est un champ non pertinent pour ce fichier. Seul un message de log dans
+`ModPackApplier.apply()` affichait autrefois cette valeur brute (toujours `v0`, donc trompeur) ;
+il calcule maintenant directement `current.getGeneration() + 1`.
+
 ## Limitations actuelles (volontaires)
 
 - Aucun chargement ou déchargement de mod à chaud.
