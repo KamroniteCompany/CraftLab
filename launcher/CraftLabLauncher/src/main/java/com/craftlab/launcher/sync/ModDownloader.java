@@ -72,8 +72,18 @@ public class ModDownloader {
         Files.createDirectories(finalPath.getParent());
         Files.deleteIfExists(tempPath);
 
+        fetchToTempFile(URI.create(entry.downloadUrl()), tempPath, entry.modId(), onProgress);
+        finalizeDownload(tempPath, finalPath, entry.sha256(), entry.modId());
+    }
+
+    /**
+     * Effectue la requête HTTP et écrit le corps dans tempPath, taille bornée pendant le flux.
+     * Package-private et séparée de download() pour être testable contre un serveur HTTP de test
+     * sans avoir à satisfaire la validation HTTPS-only ci-dessus (voir ModDownloaderTest).
+     */
+    void fetchToTempFile(URI uri, Path tempPath, String modId, LongConsumer onProgress) throws IOException, InterruptedException {
         HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(entry.downloadUrl()))
+            .uri(uri)
             .timeout(Duration.ofMinutes(5))
             .GET()
             .build();
@@ -89,16 +99,23 @@ public class ModDownloader {
         HttpResponse<Path> response = httpClient.send(request, handler);
         if (response.statusCode() != 200 || response.body() == null) {
             Files.deleteIfExists(tempPath);
-            throw new IOException("Échec du téléchargement de " + entry.modId() + " (code " + response.statusCode() + ").");
+            throw new IOException("Échec du téléchargement de " + modId + " (code " + response.statusCode() + ").");
         }
+    }
 
-        String actual = sha256(response.body());
-        if (entry.sha256() == null || !entry.sha256().equalsIgnoreCase(actual)) {
+    /**
+     * Vérifie le SHA-256 du fichier déjà téléchargé dans tempPath et le déplace vers finalPath si
+     * valide (sinon le supprime). Package-private et séparée de download() pour être testable
+     * sans réseau (voir ModDownloaderTest).
+     */
+    void finalizeDownload(Path tempPath, Path finalPath, String expectedSha256, String modId) throws IOException {
+        String actual = sha256(tempPath);
+        if (expectedSha256 == null || !expectedSha256.equalsIgnoreCase(actual)) {
             Files.deleteIfExists(tempPath);
-            throw new IOException("SHA-256 invalide pour " + entry.modId() + " après téléchargement.");
+            throw new IOException("SHA-256 invalide pour " + modId + " après téléchargement.");
         }
 
-        Files.move(response.body(), finalPath, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+        Files.move(tempPath, finalPath, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
     }
 
     private String sha256(Path file) throws IOException {

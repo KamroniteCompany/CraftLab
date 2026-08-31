@@ -7,23 +7,19 @@ import com.craftlab.launcher.instance.InstancePaths;
 import com.craftlab.launcher.modpack.ModPackProvider;
 import com.craftlab.launcher.modpack.RemoteModEntry;
 import com.craftlab.launcher.modpack.RemoteModPack;
-import com.craftlab.launcher.state.LauncherState;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
+import static com.craftlab.launcher.sync.SyncTestSupport.await;
+import static com.craftlab.launcher.sync.SyncTestSupport.noopListener;
+import static com.craftlab.launcher.sync.SyncTestSupport.sha256;
+import static com.craftlab.launcher.sync.SyncTestSupport.writeFile;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -78,34 +74,5 @@ class SyncManagerActiveFileCleanupTest {
         // Le cache des deux versions doit rester intact (jamais purgé automatiquement).
         assertTrue(Files.exists(paths.downloadsDir().resolve("blankmod").resolve("1.0.0").resolve("blankmod-1.0.0.jar")));
         assertTrue(Files.exists(paths.downloadsDir().resolve("blankmod").resolve("1.1.0").resolve("blankmod-1.1.0.jar")));
-    }
-
-    private static void writeFile(Path path, byte[] content) throws IOException {
-        Files.createDirectories(path.getParent());
-        Files.write(path, content);
-    }
-
-    private static String sha256(byte[] content) throws NoSuchAlgorithmException {
-        return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(content));
-    }
-
-    private static SyncManager.Listener noopListener() {
-        return new SyncManager.Listener() {
-            @Override
-            public void onStateChanged(LauncherState state) {
-            }
-
-            @Override
-            public void onModProgress(String modId, long bytesWritten, long totalBytesHint) {
-            }
-
-            @Override
-            public void onLog(String message) {
-            }
-        };
-    }
-
-    private static <T> T await(CompletableFuture<T> future) throws ExecutionException, InterruptedException, TimeoutException {
-        return future.get(10, TimeUnit.SECONDS);
     }
 }
