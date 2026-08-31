@@ -60,13 +60,15 @@ sauvegarde, en attendant cette validation. **Mise à jour (audit du 2026-08-31)*
 fonctionne correctement depuis longtemps et ce dossier a depuis été nettoyé — il n'existe plus
 sur le serveur réel.
 
-**Reliquat encore présent (audit du 2026-08-31)** : l'entrée `communitytest` elle-même existe
-toujours dans le `ModRegistry` réel (`config/craftlabcore/mods.json`), statut `TESTING`, avec
-une source GitHub pointant vers `KamroniteCompany/CraftLabCore` — un dépôt qui n'existe pas
-(le monorepo est `KamroniteCompany/CraftLab`). C'est un reliquat de données pré-migration, sans
-lien avec le mod `craftlabcore` réellement utilisé aujourd'hui ; il n'est jamais traité par
-`/mod github refresh` (qui ne touche que les mods `ACCEPTED`) et ne bloque rien. Sa suppression
-nécessite une décision explicite (voir le rapport d'audit) plutôt qu'un nettoyage automatique.
+**Reliquat supprimé (2026-08-31).** L'entrée `communitytest` a existé dans le `ModRegistry` réel
+(`config/craftlabcore/mods.json`) jusqu'à cette date, statut `TESTING`, avec une source GitHub
+pointant vers `KamroniteCompany/CraftLabCore` — un dépôt qui n'a jamais existé (le monorepo est
+`KamroniteCompany/CraftLab`). Analyse complète avant suppression : aucun vote associé
+(`proposals/communitytest.json` inexistant), absente de `managed-mods.json` (jamais gérée par
+le ModPack), absente de tout backup, jamais traitée par `/mod github refresh` (qui ne touche
+que les mods `ACCEPTED`). Confirmée totalement isolée et sans dépendance, elle a été retirée de
+`mods.json` (sauvegarde préalable dans `config/craftlabcore/backups/manual-<horodatage>-pre-communitytest-removal/`),
+serveur arrêté puis redémarré proprement, `/mod list` ne l'affiche plus.
 
 ## Étapes manuelles restantes (hors du contrôle de ce dépôt)
 
