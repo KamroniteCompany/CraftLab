@@ -24,11 +24,20 @@ public class ModPackBackupManager {
     private static final DateTimeFormatter ID_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
 
     private final Path backupsRoot;
+    private final Path modsDir;
     private final ManagedModsStorage manifestStorage;
 
     public ModPackBackupManager() {
         this.backupsRoot = FMLPaths.CONFIGDIR.get().resolve("craftlabcore").resolve("backups");
+        this.modsDir = FMLPaths.MODSDIR.get();
         this.manifestStorage = new ManagedModsStorage();
+    }
+
+    /** Pour les tests : évite l'appel à FMLPaths (indisponible hors environnement Forge/FML). */
+    ModPackBackupManager(Path backupsRoot, Path modsDir, ManagedModsStorage manifestStorage) {
+        this.backupsRoot = backupsRoot;
+        this.modsDir = modsDir;
+        this.manifestStorage = manifestStorage;
     }
 
     /** Sauvegarde les fichiers actuellement gérés (d'après ce manifest) + le manifest + current-modpack.json. */
@@ -37,7 +46,6 @@ public class ModPackBackupManager {
         Path folder = backupsRoot.resolve(id);
         Files.createDirectories(folder.resolve("mods"));
 
-        Path modsDir = FMLPaths.MODSDIR.get();
         for (ManagedModEntry entry : currentManifest.getMods()) {
             Path source = modsDir.resolve(entry.getFile());
             if (Files.exists(source)) {
@@ -73,7 +81,6 @@ public class ModPackBackupManager {
      * fichiers du backup ne soient recopiés.
      */
     public void restore(ModPackBackup backup, ManagedModsManifest manifestBeforeRestore) throws IOException {
-        Path modsDir = FMLPaths.MODSDIR.get();
         Path backedUpModsDir = backup.folder().resolve("mods");
 
         for (ManagedModEntry entry : manifestBeforeRestore.getMods()) {

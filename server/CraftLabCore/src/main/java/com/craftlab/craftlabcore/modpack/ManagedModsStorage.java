@@ -29,6 +29,11 @@ public class ManagedModsStorage {
         this.filePath = FMLPaths.CONFIGDIR.get().resolve("craftlabcore").resolve("managed-mods.json");
     }
 
+    /** Pour les tests : évite l'appel à FMLPaths (indisponible hors environnement Forge/FML). */
+    ManagedModsStorage(Path filePath) {
+        this.filePath = filePath;
+    }
+
     public Path path() {
         return filePath;
     }

@@ -13,6 +13,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.function.Function;
 
 /**
  * Génère config/craftlabcore/modpack/current-modpack-launcher.json : une projection en
@@ -33,6 +34,28 @@ public final class LauncherModPackExporter {
         Path filePath = FMLPaths.CONFIGDIR.get().resolve("craftlabcore").resolve("modpack")
             .resolve("current-modpack-launcher.json");
 
+        String json = toJson(current, modId -> ModRegistry.get().get(modId)
+            .map(ModDefinition::getRelease)
+            .map(release -> release == null ? null : release.getAssetDownloadUrl())
+            .orElse(null));
+
+        try {
+            Files.createDirectories(filePath.getParent());
+            try (BufferedWriter writer = Files.newBufferedWriter(filePath, StandardCharsets.UTF_8)) {
+                writer.write(json);
+            }
+        } catch (IOException ignored) {
+            // Pas bloquant pour l'application du ModPack elle-même : le launcher retentera
+            // simplement de lire un fichier à jour la prochaine fois.
+        }
+    }
+
+    /**
+     * Construit le JSON d'export à partir de CURRENT, sans dépendre de FMLPaths ni de l'instance
+     * réelle de ModRegistry (downloadUrlResolver la remplace par une simple fonction) : reflète
+     * exactement ce que export() écrit sur disque, testable sans environnement Forge/FML.
+     */
+    static String toJson(ModPack current, Function<String, String> downloadUrlResolver) {
         JsonObject root = new JsonObject();
         root.addProperty("minecraftVersion", current.getMinecraftVersion());
         root.addProperty("forgeVersion", current.getForgeVersion());
@@ -48,10 +71,7 @@ public final class LauncherModPackExporter {
             obj.addProperty("sha256", entry.getSha256());
             obj.addProperty("size", entry.getSize());
 
-            String downloadUrl = ModRegistry.get().get(entry.getModId())
-                .map(ModDefinition::getRelease)
-                .map(release -> release == null ? null : release.getAssetDownloadUrl())
-                .orElse(null);
+            String downloadUrl = downloadUrlResolver.apply(entry.getModId());
             if (downloadUrl != null) {
                 obj.addProperty("downloadUrl", downloadUrl);
             }
@@ -60,14 +80,6 @@ public final class LauncherModPackExporter {
         }
         root.add("mods", mods);
 
-        try {
-            Files.createDirectories(filePath.getParent());
-            try (BufferedWriter writer = Files.newBufferedWriter(filePath, StandardCharsets.UTF_8)) {
-                GSON.toJson(root, writer);
-            }
-        } catch (IOException ignored) {
-            // Pas bloquant pour l'application du ModPack elle-même : le launcher retentera
-            // simplement de lire un fichier à jour la prochaine fois.
-        }
+        return GSON.toJson(root);
     }
 }

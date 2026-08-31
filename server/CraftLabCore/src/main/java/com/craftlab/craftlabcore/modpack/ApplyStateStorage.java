@@ -20,6 +20,11 @@ public class ApplyStateStorage {
         this.filePath = FMLPaths.CONFIGDIR.get().resolve("craftlabcore").resolve("modpack").resolve("apply-state.txt");
     }
 
+    /** Pour les tests : évite l'appel à FMLPaths (indisponible hors environnement Forge/FML). */
+    ApplyStateStorage(Path filePath) {
+        this.filePath = filePath;
+    }
+
     public ApplyState load() {
         if (!Files.exists(filePath)) {
             return ApplyState.NOT_READY;
