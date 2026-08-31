@@ -31,6 +31,10 @@ minecraft {
             workingDirectory project.file('run')
             property 'forge.logging.markers', 'REGISTRIES'
             property 'forge.logging.console.level', 'debug'
+            // Sur cette machine, le cacerts par défaut du JDK ne valide pas la chaîne de
+            // certification de GitHub (voir user_jvm_args.txt du serveur réel pour le même
+            // correctif) : sans ce flag, tout appel HTTPS depuis ce JVM de dev échoue en SSL.
+            jvmArgs '-Djavax.net.ssl.trustStoreType=WINDOWS-ROOT'
         }
 
         client {

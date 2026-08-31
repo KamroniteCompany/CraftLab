@@ -67,7 +67,9 @@ public final class ModCommand {
                     .requires(source -> source.hasPermission(2))
                     .then(Commands.literal("import")
                         .then(Commands.argument("url", StringArgumentType.greedyString())
-                            .executes(ModCommand::runGitHubImport))))
+                            .executes(ModCommand::runGitHubImport)))
+                    .then(Commands.literal("refresh")
+                        .executes(ModCommand::runGitHubRefresh)))
         );
     }
 
@@ -200,6 +202,52 @@ public final class ModCommand {
             })
         );
         return 1;
+    }
+
+    private static int runGitHubRefresh(CommandContext<CommandSourceStack> ctx) {
+        CommandSourceStack source = ctx.getSource();
+        MinecraftServer server = source.getServer();
+
+        source.sendSuccess(() -> Component.literal(
+            "Vérification des releases GitHub pour tous les mods ACCEPTED déjà rattachés..."), false);
+
+        GitHubIntegration.importer().refreshAll().whenComplete((entries, throwable) ->
+            server.execute(() -> {
+                if (throwable != null) {
+                    source.sendFailure(Component.literal(
+                        "✗ Échec de la vérification\n\nRaison :\nErreur inattendue : " + throwable.getMessage()));
+                    return;
+                }
+                reportRefreshResult(source, entries);
+            })
+        );
+        return 1;
+    }
+
+    private static void reportRefreshResult(CommandSourceStack source, java.util.List<com.craftlab.craftlabcore.github.GitHubModImporter.RefreshEntry> entries) {
+        if (entries.isEmpty()) {
+            source.sendSuccess(() -> Component.literal(
+                "Aucun mod ACCEPTED avec une source GitHub à vérifier."), false);
+            return;
+        }
+
+        StringBuilder sb = new StringBuilder("Vérification terminée :\n");
+        for (var entry : entries) {
+            if (!entry.result().isSuccess()) {
+                sb.append("\n✗ ").append(entry.modId()).append(" : ").append(entry.result().getMessage());
+                continue;
+            }
+            String newVersion = entry.result().getMod().getVersion();
+            if (newVersion.equals(entry.previousVersion())) {
+                sb.append("\n= ").append(entry.modId()).append(' ').append(newVersion).append(" (déjà à jour)");
+            } else {
+                sb.append("\n~ ").append(entry.modId()).append(' ')
+                    .append(entry.previousVersion()).append(" → ").append(newVersion);
+            }
+        }
+        sb.append("\n\nPense à lancer /modpack prepare <modId> pour les mods mis à jour, "
+            + "puis à vérifier /modpack diff avant /modpack apply.");
+        source.sendSuccess(() -> Component.literal(sb.toString()), true);
     }
 
     private static void reportImportResult(CommandSourceStack source, ImportResult result) {

@@ -37,6 +37,40 @@ public final class GitHubModImporter {
         this.service = service;
     }
 
+    /** Résultat d'un modId traité par refreshAll(), avant/après sa version enregistrée. */
+    public record RefreshEntry(String modId, ImportResult result, String previousVersion) {
+    }
+
+    /**
+     * Automatise la première étape du cycle de publication (voir docs/github-mod-format.md) :
+     * pour chaque mod déjà ACCEPTED et déjà lié à une source GitHub connue, relance
+     * importFromUrl() sur son repository enregistré, exactement comme le ferait un opérateur
+     * tapant /mod github import à la main pour ce mod. Ne fait rien de plus : ne prépare jamais
+     * NEXT, ne promeut jamais CURRENT — ces étapes restent des décisions manuelles distinctes
+     * (voir ModPackManager.sync()/prepareMod()), pour ne jamais court-circuiter la validation
+     * communautaire. Un mod sans source GitHub (bootstrap, /mod register manuel) n'est jamais
+     * concerné : il n'y a rien à "rafraîchir" tant qu'aucun premier rattachement n'a eu lieu.
+     */
+    public CompletableFuture<List<RefreshEntry>> refreshAll() {
+        List<ModDefinition> candidates = ModRegistry.get().getAll().stream()
+            .filter(m -> m.getStatus() == ModStatus.ACCEPTED)
+            .filter(m -> m.getSource() != null && ModSource.TYPE_GITHUB.equals(m.getSource().getType()))
+            .toList();
+
+        CompletableFuture<List<RefreshEntry>> chain = CompletableFuture.completedFuture(new java.util.ArrayList<>());
+        for (ModDefinition mod : candidates) {
+            String modId = mod.getId();
+            String previousVersion = mod.getVersion();
+            String url = mod.getSource().getRepositoryUrl();
+            chain = chain.thenCompose(entries -> importFromUrl(url).thenApply(result -> {
+                List<RefreshEntry> next = new java.util.ArrayList<>(entries);
+                next.add(new RefreshEntry(modId, result, previousVersion));
+                return next;
+            }));
+        }
+        return chain;
+    }
+
     public CompletableFuture<ImportResult> importFromUrl(String url) {
         Optional<GitHubUrl> parsed = GitHubUrl.parse(url);
         if (parsed.isEmpty()) {
