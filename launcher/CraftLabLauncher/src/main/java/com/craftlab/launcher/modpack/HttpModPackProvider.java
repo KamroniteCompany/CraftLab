@@ -6,6 +6,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
 
 public class HttpModPackProvider implements ModPackProvider {
@@ -48,6 +49,19 @@ public class HttpModPackProvider implements ModPackProvider {
                         throw new ModPackFetchException("Le serveur ModPack a répondu avec le code " + response.statusCode() + ".");
                     }
                     return ModPackJson.parse(response.body());
+                })
+                // Un échec ASYNCHRONE (connexion refusée, DNS, timeout déclenché par orTimeout()
+                // ci-dessus) ne passe jamais par le catch synchrone plus bas : sans ce filet, ces
+                // cas fuiraient sous leur type brut (ConnectException, TimeoutException...) au lieu
+                // d'être rapportés comme les autres échecs via ModPackFetchException.
+                .exceptionally(throwable -> {
+                    Throwable cause = throwable instanceof CompletionException && throwable.getCause() != null
+                        ? throwable.getCause() : throwable;
+                    if (cause instanceof ModPackFetchException fetchException) {
+                        throw fetchException;
+                    }
+                    throw new ModPackFetchException(
+                        "Impossible de récupérer le ModPack depuis '" + url + "' : " + cause.getMessage());
                 });
         } catch (RuntimeException e) {
             return CompletableFuture.failedFuture(
