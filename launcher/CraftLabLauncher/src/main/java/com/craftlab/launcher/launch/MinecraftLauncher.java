@@ -162,7 +162,7 @@ public class MinecraftLauncher {
         }
         onLog.accept("[CraftLab] Aucun placeholder non résolu.");
 
-        String javaExecutable = ProcessHandle.current().info().command().orElse("java");
+        String javaExecutable = resolveJavaExecutable();
 
         List<String> command = new ArrayList<>();
         command.add(javaExecutable);
@@ -227,6 +227,36 @@ public class MinecraftLauncher {
         });
 
         return process;
+    }
+
+    /**
+     * Réutiliser tel quel ProcessHandle.current().info().command() (l'ancien comportement) n'est
+     * valable qu'en développement (gradlew run, java -jar) : dans ces cas, ce chemin désigne bien
+     * une vraie JVM générique, réutilisable avec -cp/main-class arbitraires. Une fois packagé via
+     * jpackage, ce même appel renvoie le chemin de l'exécutable NATIF du launcher (ex. "CraftLab
+     * Launcher.exe"), qui n'accepte pas ces arguments — il ignore la classpath/main-class fournis
+     * et relance simplement une nouvelle instance du launcher (bug réel constaté le 2026-08-31 :
+     * cliquer "Jouer" rouvrait une fenêtre du launcher au lieu de démarrer Minecraft).
+     *
+     * Le runtime réellement embarqué par jpackage (voir build.gradle, tâche jlinkRuntime) vit
+     * dans <dossier de l'exe>\runtime\bin\javaw.exe — un chemin déterministe du format d'app-image
+     * jpackage, indépendant de la version. On le préfère quand il existe ; sinon (mode
+     * développement, où aucun dossier "runtime" ne vit à côté de java.exe/javaw.exe), on retombe
+     * sur l'ancien comportement.
+     */
+    private String resolveJavaExecutable() {
+        var ownExecutable = ProcessHandle.current().info().command();
+        if (ownExecutable.isPresent()) {
+            Path exePath = Path.of(ownExecutable.get());
+            Path exeDir = exePath.getParent();
+            if (exeDir != null) {
+                Path bundledJavaw = exeDir.resolve("runtime").resolve("bin").resolve("javaw.exe");
+                if (Files.isRegularFile(bundledJavaw)) {
+                    return bundledJavaw.toString();
+                }
+            }
+        }
+        return ownExecutable.orElse("java");
     }
 
     private List<String> findUnresolvedPlaceholders(List<String> jvmArgs, List<String> gameArgs) {

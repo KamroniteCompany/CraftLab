@@ -48,15 +48,65 @@ jar {
 // dans "Applications et fonctionnalités").
 ext.winUpgradeUuid = 'd28717a0-496b-49e4-a508-b8d8166c69f5'
 
+// Modules JDK réellement nécessaires (java.base/java.desktop/java.net.http/java.sql/jdk.jfr/
+// jdk.unsupported : calculés via jdeps --print-module-deps contre le jar + ses dépendances ;
+// jdk.crypto.ec/jdk.crypto.mscapi/jdk.zipfs : ajoutés manuellement — jdeps ne peut PAS détecter
+// les fournisseurs chargés via ServiceLoader (JCE/TLS, filesystem jar:) puisqu'ils ne sont
+// référencés par aucune classe du bytecode analysé. Sans jdk.crypto.ec en particulier, les
+// téléchargements HTTPS (mods, ModPack distant) échoueraient silencieusement par handshake TLS
+// selon les suites de chiffrement négociées — jamais vérifié en conditions réelles avant
+// d'inclure ce module par prudence, donc à surveiller si un jour la liste est réduite davantage.
+ext.jlinkModules = [
+    'java.base', 'java.desktop', 'java.net.http', 'java.sql', 'jdk.jfr', 'jdk.unsupported',
+    'jdk.crypto.ec', 'jdk.crypto.mscapi', 'jdk.zipfs'
+].join(',')
+
 /**
- * Produit un installeur Windows (.exe, via WiX/jpackage) qui embarque le runtime Java du JDK 21
- * utilisé pour le build (aucune dépendance à un Java déjà installé chez le joueur). Dépend de
- * installDist (tâche standard du plugin 'application') pour obtenir un dossier lib/ contenant
- * le jar du launcher et toutes ses dépendances resolues (Gson, JavaFX pour l'OS courant) — c'est
- * exactement le dossier attendu par jpackage en mode --input (application non modulaire).
+ * Construit un runtime Java réduit (jlink) au lieu de laisser jpackage embarquer le JDK complet
+ * du toolchain (149 Mo, dont compilateur/débogueur/jshell/javadoc jamais utilisés par le
+ * launcher). Sans --strip-native-commands (contrairement au runtime que jpackage construit lui-
+ * même par défaut) : java.exe/javaw.exe DOIVENT rester présents dans runtime/bin/, sans quoi
+ * MinecraftLauncher n'a plus de JVM générique à relancer pour Minecraft une fois packagé (bug
+ * réel constaté le 2026-08-31 : cliquer "Jouer" rouvrait le launcher lui-même à la place).
+ */
+tasks.register('jlinkRuntime', Exec) {
+    group = 'distribution'
+    description = 'Construit le runtime Java réduit (jlink) embarqué par jpackageWindows.'
+
+    def javaLauncher = javaToolchains.launcherFor(java.toolchain).get()
+    def javaHome = javaLauncher.metadata.installationPath.asFile
+    def jlinkExecutable = new File(javaHome, 'bin/jlink.exe')
+    def outputDir = layout.buildDirectory.dir('runtime-image').get().asFile
+
+    outputs.dir(outputDir)
+
+    doFirst {
+        if (!jlinkExecutable.exists()) {
+            throw new GradleException("jlink introuvable : ${jlinkExecutable}.")
+        }
+        // jlink refuse d'écrire dans un dossier déjà existant, même vide.
+        delete(outputDir)
+    }
+
+    commandLine(
+        jlinkExecutable.absolutePath,
+        '--add-modules', jlinkModules,
+        '--output', outputDir.absolutePath,
+        '--no-header-files',
+        '--no-man-pages',
+        '--compress=2'
+    )
+}
+
+/**
+ * Produit un installeur Windows (.exe, via WiX/jpackage) qui embarque le runtime jlink réduit
+ * ci-dessus (aucune dépendance à un Java déjà installé chez le joueur). Dépend de installDist
+ * (tâche standard du plugin 'application') pour obtenir un dossier lib/ contenant le jar du
+ * launcher et toutes ses dépendances resolues (Gson, JavaFX pour l'OS courant) — c'est exactement
+ * le dossier attendu par jpackage en mode --input (application non modulaire).
  */
 tasks.register('jpackageWindows', Exec) {
-    dependsOn tasks.named('installDist')
+    dependsOn tasks.named('installDist'), tasks.named('jlinkRuntime')
     group = 'distribution'
     description = 'Génère CraftLab-Launcher-<version>.exe (installeur Windows, JRE embarqué).'
 
@@ -64,10 +114,12 @@ tasks.register('jpackageWindows', Exec) {
     def javaHome = javaLauncher.metadata.installationPath.asFile
     def jpackageExecutable = new File(javaHome, 'bin/jpackage.exe')
     def libDir = layout.buildDirectory.dir('install/craftlab-launcher/lib')
+    def runtimeImageDir = layout.buildDirectory.dir('runtime-image')
     def outputDir = layout.buildDirectory.dir('jpackage')
     def iconFile = file('packaging/craftlab-launcher.ico')
 
     inputs.dir(libDir)
+    inputs.dir(runtimeImageDir)
     inputs.file(iconFile)
     outputs.dir(outputDir)
 
@@ -92,6 +144,7 @@ tasks.register('jpackageWindows', Exec) {
         '--copyright', 'KamroniteCompany',
         '--icon', iconFile.absolutePath,
         '--input', libDir.get().asFile.absolutePath,
+        '--runtime-image', runtimeImageDir.get().asFile.absolutePath,
         '--main-jar', "craftlab-launcher-${project.version}.jar",
         // Launcher, PAS CraftLabLauncherApp : voir sa javadoc pour la raison exacte
         // ("Error: JavaFX runtime components are missing" reproduit et corrigé le 2026-08-31).
