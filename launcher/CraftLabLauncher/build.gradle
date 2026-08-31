@@ -48,34 +48,40 @@ jar {
 // dans "Applications et fonctionnalités").
 ext.winUpgradeUuid = 'd28717a0-496b-49e4-a508-b8d8166c69f5'
 
-// Modules JDK réellement nécessaires (java.base/java.desktop/java.net.http/java.sql/jdk.jfr/
-// jdk.unsupported : calculés via jdeps --print-module-deps contre le jar + ses dépendances ;
-// jdk.crypto.ec/jdk.crypto.mscapi/jdk.zipfs : ajoutés manuellement — jdeps ne peut PAS détecter
-// les fournisseurs chargés via ServiceLoader (JCE/TLS, filesystem jar:) puisqu'ils ne sont
-// référencés par aucune classe du bytecode analysé. Sans jdk.crypto.ec en particulier, les
-// téléchargements HTTPS (mods, ModPack distant) échoueraient silencieusement par handshake TLS
-// selon les suites de chiffrement négociées — jamais vérifié en conditions réelles avant
-// d'inclure ce module par prudence, donc à surveiller si un jour la liste est réduite davantage.
-ext.jlinkModules = [
-    'java.base', 'java.desktop', 'java.net.http', 'java.sql', 'jdk.jfr', 'jdk.unsupported',
-    'jdk.crypto.ec', 'jdk.crypto.mscapi', 'jdk.zipfs'
-].join(',')
-
 /**
- * Construit un runtime Java réduit (jlink) au lieu de laisser jpackage embarquer le JDK complet
- * du toolchain (149 Mo, dont compilateur/débogueur/jshell/javadoc jamais utilisés par le
- * launcher). Sans --strip-native-commands (contrairement au runtime que jpackage construit lui-
- * même par défaut) : java.exe/javaw.exe DOIVENT rester présents dans runtime/bin/, sans quoi
- * MinecraftLauncher n'a plus de JVM générique à relancer pour Minecraft une fois packagé (bug
- * réel constaté le 2026-08-31 : cliquer "Jouer" rouvrait le launcher lui-même à la place).
+ * Construit un runtime Java (jlink) embarquant TOUS les modules du JDK, au lieu d'une liste
+ * restreinte calculée via jdeps.
+ *
+ * Tentative initiale (2026-08-31) : une liste de modules calculée via `jdeps --print-module-deps`
+ * contre le jar du launcher + ses dépendances (java.base/java.desktop/java.net.http/java.sql/
+ * jdk.jfr/jdk.unsupported, + jdk.crypto.ec/jdk.crypto.mscapi/jdk.zipfs ajoutés à la main pour les
+ * fournisseurs chargés via ServiceLoader que jdeps ne voit pas). Cette liste ne couvrait que les
+ * besoins du LAUNCHER lui-même — mais ce même runtime sert aussi à lancer Minecraft/Forge (voir
+ * MinecraftLauncher.resolveJavaExecutable()), dont les besoins sont fondamentalement différents
+ * et impossibles à énumérer à l'avance : Forge/Mixin utilisent le module system Java avec leurs
+ * propres `requires` (ex. `java.compiler`, requis par org.spongepowered.mixin — absent de la
+ * liste calculée, provoquant "Module java.compiler not found" au clic sur "Jouer", constaté en
+ * conditions réelles). Pire : n'importe quel MOD tiers pourrait un jour exiger n'importe quel
+ * autre module JDK, ce qui rend toute liste figée intrinsèquement fragile pour ce cas d'usage
+ * précis (contrairement à une application "fermée" dont les dépendances sont enitèrement connues
+ * à la compilation).
+ *
+ * D'où ALL-MODULE-PATH : fonctionnellement équivalent au JDK complet (aucun risque de module
+ * manquant, quel que soit le mod installé), tout en restant plus léger que le JDK brut grâce à
+ * --no-header-files/--no-man-pages/--compress (~96 Mo contre 149 Mo, mesuré). Sans
+ * --strip-native-commands (contrairement au runtime que jpackage construit lui-même par défaut) :
+ * java.exe/javaw.exe DOIVENT rester présents dans runtime/bin/, sans quoi MinecraftLauncher n'a
+ * plus de JVM générique à relancer pour Minecraft une fois packagé (bug réel constaté le
+ * 2026-08-31 : cliquer "Jouer" rouvrait le launcher lui-même à la place).
  */
 tasks.register('jlinkRuntime', Exec) {
     group = 'distribution'
-    description = 'Construit le runtime Java réduit (jlink) embarqué par jpackageWindows.'
+    description = 'Construit le runtime Java (jlink, tous modules) embarqué par jpackageWindows.'
 
     def javaLauncher = javaToolchains.launcherFor(java.toolchain).get()
     def javaHome = javaLauncher.metadata.installationPath.asFile
     def jlinkExecutable = new File(javaHome, 'bin/jlink.exe')
+    def jmodsDir = new File(javaHome, 'jmods')
     def outputDir = layout.buildDirectory.dir('runtime-image').get().asFile
 
     outputs.dir(outputDir)
@@ -84,13 +90,18 @@ tasks.register('jlinkRuntime', Exec) {
         if (!jlinkExecutable.exists()) {
             throw new GradleException("jlink introuvable : ${jlinkExecutable}.")
         }
+        if (!jmodsDir.exists()) {
+            throw new GradleException("jmods introuvable : ${jmodsDir}. "
+                + "Le toolchain Java 21 configuré doit être un JDK complet (un JRE seul n'a pas de jmods).")
+        }
         // jlink refuse d'écrire dans un dossier déjà existant, même vide.
         delete(outputDir)
     }
 
     commandLine(
         jlinkExecutable.absolutePath,
-        '--add-modules', jlinkModules,
+        '--module-path', jmodsDir.absolutePath,
+        '--add-modules', 'ALL-MODULE-PATH',
         '--output', outputDir.absolutePath,
         '--no-header-files',
         '--no-man-pages',
