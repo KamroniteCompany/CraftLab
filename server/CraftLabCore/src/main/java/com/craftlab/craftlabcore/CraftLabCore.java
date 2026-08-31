@@ -5,6 +5,8 @@ import com.craftlab.craftlabcore.command.ModPackCommand;
 import com.craftlab.craftlabcore.download.DownloadConfig;
 import com.craftlab.craftlabcore.github.GitHubConfig;
 import com.craftlab.craftlabcore.github.GitHubIntegration;
+import com.craftlab.craftlabcore.github.GitHubRefreshConfig;
+import com.craftlab.craftlabcore.github.GitHubRefreshScheduler;
 import com.craftlab.craftlabcore.mod.ModRegistry;
 import com.craftlab.craftlabcore.modpack.ModPackApplier;
 import com.craftlab.craftlabcore.modpack.ModPackManager;
@@ -68,10 +70,16 @@ public class CraftLabCore {
         // Voir ModPackApplier pour le détail du raisonnement sur le timing de chargement Forge.
         ModPackApplier.get().checkForInterruptedApply();
         ModPackApplier.get().bootstrapIfNeeded();
+
+        // Doit s'exécuter en dernier : dépend de GitHubIntegration (déjà initialisé) et de
+        // ModPackManager (déjà chargé, pour pouvoir préparer NEXT quand une mise à jour est détectée).
+        GitHubRefreshConfig.load();
+        GitHubRefreshScheduler.start(event.getServer());
     }
 
     @SubscribeEvent
     public void onServerStopping(ServerStoppingEvent event) {
         VoteScheduler.stop();
+        GitHubRefreshScheduler.stop();
     }
 }

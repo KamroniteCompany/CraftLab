@@ -42,6 +42,26 @@ public final class GitHubModImporter {
     }
 
     /**
+     * Filtre pur (aucune dépendance ModRegistry/FMLPaths, testable hors environnement Forge) :
+     * quels mods d'un résultat de refreshAll() ont une nouvelle version détectée et validée,
+     * et devraient donc être proposés à /modpack prepare. Un échec (GitHub inaccessible, etc.)
+     * ou une version inchangée ne comptent jamais comme une mise à jour.
+     */
+    public static List<String> updatedModIds(List<RefreshEntry> entries) {
+        List<String> updated = new java.util.ArrayList<>();
+        for (RefreshEntry entry : entries) {
+            if (!entry.result().isSuccess()) {
+                continue;
+            }
+            String newVersion = entry.result().getMod().getVersion();
+            if (!newVersion.equals(entry.previousVersion())) {
+                updated.add(entry.modId());
+            }
+        }
+        return updated;
+    }
+
+    /**
      * Automatise la première étape du cycle de publication (voir docs/github-mod-format.md) :
      * pour chaque mod déjà ACCEPTED et déjà lié à une source GitHub connue, relance
      * importFromUrl() sur son repository enregistré, exactement comme le ferait un opérateur

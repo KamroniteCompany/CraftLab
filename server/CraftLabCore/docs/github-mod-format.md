@@ -100,7 +100,44 @@ retaper `/mod github import <url>` à chaque nouvelle release :
 relance l'import pour **tous** les mods `ACCEPTED` déjà liés à GitHub d'un coup, et rapporte
 pour chacun `=` (déjà à jour), `~ ancienne → nouvelle` (mise à jour détectée dans le
 `ModRegistry`), ou une erreur individuelle (ex. GitHub temporairement inaccessible) sans faire
-échouer les autres mods. Cette commande s'arrête à la mise à jour du `ModRegistry` : elle ne
-prépare jamais `NEXT` ni ne promeut jamais `CURRENT` — ces décisions restent manuelles
-(`/modpack prepare`, `/modpack diff`, `/modpack apply`, voir `docs/modpack.md` et
-`docs/modpack-lifecycle.md`), pour ne jamais court-circuiter le vote communautaire.
+échouer les autres mods.
+
+## 6. Automatisation : `GitHubRefreshScheduler`
+
+Depuis cette phase, `/mod github refresh` n'a plus besoin d'être tapé à la main : un scheduler
+en arrière-plan (`GitHubRefreshScheduler`, démarré/arrêté avec le serveur) relance
+automatiquement le même `refreshAll()` à intervalle régulier.
+
+- **Configuration** : `config/craftlabcore/config.properties`, clé
+  `github_refresh_interval_minutes` (défaut **60**). `0` désactive complètement le scheduler —
+  la commande manuelle `/mod github refresh` reste disponible dans tous les cas.
+- **Ce qu'il fait en plus de la simple vérification** : pour chaque mod dont une nouvelle
+  version vient d'être enregistrée dans le `ModRegistry`, il lance automatiquement l'équivalent
+  de `/modpack prepare <modId>` (téléchargement, vérification SHA-256, ajout à `NEXT`).
+- **Ce qu'il ne fait JAMAIS** : préparer un mod non-`ACCEPTED` (même filtre que `refreshAll()`),
+  ni exécuter `/modpack apply`, ni toucher `CURRENT` de quelque façon que ce soit. La promotion
+  `NEXT → CURRENT` reste une décision manuelle distincte (voir `docs/modpack-lifecycle.md`) —
+  c'est ce qui garantit que publier une release GitHub ne se traduit jamais en déploiement
+  immédiat sans contrôle humain.
+- **Testé en conditions réelles** (audit du 2026-08-31) : ModRegistry rembobiné vers une
+  version réelle antérieure de `blankmod`, scheduler configuré à 1 minute, redémarrage — la
+  nouvelle version a été détectée et `NEXT` préparé automatiquement, sans aucune commande
+  manuelle, `CURRENT` restant strictement inchangé.
+
+Flux complet obtenu :
+
+```
+Développeur publie une release GitHub
+      ↓
+GitHubRefreshScheduler détecte (toutes les N minutes)
+      ↓
+ModRegistry mis à jour automatiquement
+      ↓
+NEXT préparé automatiquement (téléchargement + SHA-256)
+      ↓
+/modpack diff  (revue humaine)
+      ↓
+/modpack apply (décision humaine, jamais automatique)
+      ↓
+CURRENT
+```
