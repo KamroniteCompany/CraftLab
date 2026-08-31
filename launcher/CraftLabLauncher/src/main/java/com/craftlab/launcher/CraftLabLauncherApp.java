@@ -14,6 +14,8 @@ import com.craftlab.launcher.modpack.LocalFileModPackProvider;
 import com.craftlab.launcher.modpack.ModPackProvider;
 import com.craftlab.launcher.modpack.RemoteModPack;
 import com.craftlab.launcher.state.LauncherState;
+import com.craftlab.launcher.status.ServerStatus;
+import com.craftlab.launcher.status.ServerStatusChecker;
 import com.craftlab.launcher.sync.SyncManager;
 import com.craftlab.launcher.version.VersionManifestResolver;
 import javafx.application.Application;
@@ -57,9 +59,11 @@ public class CraftLabLauncherApp extends Application {
     private ModPackProvider provider;
     private SyncManager syncManager;
     private InstanceManager instanceManager;
+    private ServerStatusChecker serverStatusChecker;
     private ExecutorService executor;
 
     private Label statusLabel;
+    private Label serverStatusLabel;
     private ListView<String> modListView;
     private ProgressBar progressBar;
     private TextArea logArea;
@@ -77,6 +81,7 @@ public class CraftLabLauncherApp extends Application {
 
         syncManager = new SyncManager(provider, paths);
         instanceManager = new InstanceManager(paths);
+        serverStatusChecker = new ServerStatusChecker();
         executor = Executors.newSingleThreadExecutor(r -> {
             Thread t = new Thread(r, "CraftLab-Sync");
             t.setDaemon(true);
@@ -90,6 +95,7 @@ public class CraftLabLauncherApp extends Application {
         title.setStyle("-fx-font-size: 24px; -fx-font-weight: bold;");
 
         Label serverLabel = new Label("Serveur CraftLab — " + config.getServerAddress() + ":" + config.getServerPort());
+        serverStatusLabel = new Label("● Serveur : vérification...");
 
         statusLabel = new Label("● Non vérifié");
 
@@ -115,7 +121,7 @@ public class CraftLabLauncherApp extends Application {
         log.setUiListener(line -> Platform.runLater(() -> logArea.appendText(line + "\n")));
 
         VBox root = new VBox(12,
-            title, serverLabel, statusLabel, modListView, progressBar, buttons,
+            title, serverLabel, serverStatusLabel, statusLabel, modListView, progressBar, buttons,
             new Label("Journal :"), logArea
         );
         root.setPadding(new Insets(16));
@@ -126,7 +132,34 @@ public class CraftLabLauncherApp extends Application {
 
         log.log("[CraftLab] Launcher build: " + BUILD_ID);
         log.log("CraftLab Launcher démarré. Instance : " + paths.instanceDir());
+        // Indépendant de runSync() : une vérification lente/en échec ne doit jamais retarder ni
+        // affecter la synchronisation du ModPack, et inversement.
+        refreshServerStatus();
         runSync();
+    }
+
+    /**
+     * Interroge le serveur via Server List Ping (voir ServerStatusChecker) — jamais RCON, jamais
+     * bloquant pour le thread JavaFX : le résultat arrive de façon asynchrone et ne fait que
+     * mettre à jour un label, quel que soit le résultat (y compris une erreur réseau).
+     */
+    private void refreshServerStatus() {
+        serverStatusChecker.check(config.getServerAddress(), config.getServerPort())
+            .thenAccept(status -> Platform.runLater(() -> {
+                serverStatusLabel.setText(describeServerStatus(status));
+                log.log("[CraftLab] Statut serveur (" + config.getServerAddress() + ":" + config.getServerPort() + ") : "
+                    + describeServerStatus(status) + (status.detail() != null ? " (" + status.detail() + ")" : ""));
+            }));
+    }
+
+    private static String describeServerStatus(ServerStatus status) {
+        if (!status.online()) {
+            return "● Serveur : HORS LIGNE";
+        }
+        if (status.onlinePlayers() != null && status.maxPlayers() != null) {
+            return "● Serveur : EN LIGNE (" + status.onlinePlayers() + "/" + status.maxPlayers() + " joueurs)";
+        }
+        return "● Serveur : EN LIGNE";
     }
 
     /**
@@ -350,6 +383,7 @@ public class CraftLabLauncherApp extends Application {
     @Override
     public void stop() {
         executor.shutdownNow();
+        serverStatusChecker.shutdown();
     }
 
     public static void main(String[] args) {

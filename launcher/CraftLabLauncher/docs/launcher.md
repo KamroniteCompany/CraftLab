@@ -219,6 +219,35 @@ successifs ; elle est **isolée derrière `AuthProvider`** pour pouvoir être aj
 sans toucher au reste du launcher. Aucun mot de passe Microsoft ne doit jamais transiter par
 cette application.
 
+## Statut serveur (ONLINE/OFFLINE, joueurs) — sans RCON
+
+`ServerStatusChecker` interroge le serveur via **Server List Ping (SLP)**, le protocole que
+l'écran "Multijoueur" vanilla utilise lui-même pour afficher le statut d'un serveur dans sa
+liste — pas RCON, aucune configuration serveur supplémentaire requise (fonctionne sur le port de
+jeu normal, 25565 par défaut, exactement comme un client Minecraft se connectant). Compatible
+avec Minecraft 1.21.1 / Forge 52.1.0 sans dépendre du numéro de version de protocole exact (voir
+le commentaire de `writeHandshake()` : `-1` suffit pour une requête de statut).
+
+Séquence : handshake (adresse/port, next_state=1) → requête de statut → réponse JSON
+(`players.online`, `players.max`) → fermeture du socket. Tout le framing utilise l'encodage
+VarInt du protocole Minecraft (voir `writeVarInt`/`readVarInt`).
+
+**Jamais bloquant.** `check()` délègue à un pool de threads démons dédié et retourne un
+`CompletableFuture<ServerStatus>` ; `CraftLabLauncherApp` l'appelle indépendamment de
+`runSync()` au démarrage — un serveur lent à répondre ou injoignable ne retarde jamais la
+synchronisation du ModPack, ni l'inverse. Timeouts courts (3 s connexion, 3 s lecture) : un
+serveur réellement éteint est rapporté "hors ligne" en quelques millisecondes (connexion
+refusée), un serveur qui n'écoute plus mais dont le port reste ouvert l'est en au plus 3 s
+(timeout de lecture) — jamais d'attente indéfinie.
+
+Toute erreur réseau (port fermé, DNS invalide, timeout, réponse JSON malformée) devient un
+`ServerStatus.offline(raison)` : `checkBlocking()` ne laisse jamais une exception se propager à
+l'appelant, exactement comme les autres composants réseau du launcher (voir `ModDownloader`,
+`HttpModPackProvider`).
+
+**RCON ne doit jamais être réactivé pour cette fonctionnalité** — SLP fournit déjà tout ce dont
+un statut ONLINE/OFFLINE + nombre de joueurs a besoin, sans les risques de sécurité de RCON.
+
 ## Limitations actuelles (volontaires)
 
 - Un seul profil ("craftlab"), pas de gestion multi-serveurs.
@@ -261,9 +290,18 @@ Rien de ce qui est propre à une machine ou généré à l'exécution n'est vers
   régénère lui-même au premier lancement, sous `%APPDATA%\CraftLabLauncher\` (ou
   `~/.craftlab-launcher`).
 - **`launcher.properties`** (source du ModPack, adresse/port du serveur, pseudo,
-  résolution) : généré avec des valeurs par défaut au premier lancement dans ce même
-  répertoire (voir `LauncherConfig`) — jamais dans le dépôt, à modifier localement selon ton
-  serveur.
+  résolution) : généré au premier lancement dans ce même répertoire — jamais dans le dépôt, à
+  modifier localement selon ton serveur.
+
+  **Deux couches, jamais mélangées dans le code (`LauncherConfig`, mise à jour du 2026-09-01)** :
+  - `src/main/resources/default-launcher.properties` — les valeurs PAR DÉFAUT, embarquées dans
+    le JAR. **Le seul fichier à modifier** pour changer ce qu'obtient un joueur qui n'a jamais
+    lancé le launcher (adresse du vrai serveur CraftLab notamment) — jamais une valeur codée en
+    dur ailleurs dans le code Java.
+  - `%APPDATA%\CraftLabLauncher\launcher.properties` — les valeurs UTILISATEUR, qui l'emportent
+    clé par clé sur les défauts dès que le fichier existe (`new Properties(defaults)`, voir
+    `LauncherConfig.load()`). Modifier une seule clé (ex. `username`) ne fait jamais perdre les
+    autres valeurs par défaut.
 - **`current-modpack-launcher.json`** (à la racine de ce projet) est la seule exception :
   c'est un exemple versionné, avec des valeurs génériques (`REMPLACE_PAR_LE_VRAI_SHA256_DU_JAR`,
   URL GitHub placeholder), utilisé par `modpack_url=file:./current-modpack-launcher.json` pour

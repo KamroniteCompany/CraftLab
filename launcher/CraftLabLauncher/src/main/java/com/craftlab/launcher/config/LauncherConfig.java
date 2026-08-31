@@ -10,10 +10,18 @@ import java.util.Properties;
 /**
  * Configuration locale : source du ModPack, adresse du serveur CraftLab, pseudo. Pour cette
  * première version, un seul profil ; rien n'empêche d'étendre vers plusieurs profils plus tard.
+ *
+ * Deux couches, jamais mélangées dans le code : les valeurs PAR DÉFAUT (embarquées dans le JAR,
+ * voir default-launcher.properties dans les ressources — le seul fichier à modifier pour changer
+ * ce qu'obtient un joueur au tout premier lancement) et les valeurs UTILISATEUR (le fichier
+ * modifiable dans %APPDATA%\CraftLabLauncher\, qui l'emporte clé par clé sur les défauts dès
+ * qu'elle existe). Aucun chemin ni adresse propre à une machine de développement n'est codé en
+ * dur dans cette classe.
  */
 public final class LauncherConfig {
 
     private static final String FILE_NAME = "launcher.properties";
+    private static final String DEFAULTS_RESOURCE = "/default-launcher.properties";
 
     private final Path filePath;
     private String modPackUrl;
@@ -28,25 +36,48 @@ public final class LauncherConfig {
     }
 
     public void load() {
-        Properties properties = new Properties();
+        Properties defaults = loadBundledDefaults();
+        Properties properties = new Properties(defaults);
         if (Files.exists(filePath)) {
             try (InputStream in = Files.newInputStream(filePath)) {
                 properties.load(in);
             } catch (IOException ignored) {
-                // On repart des valeurs par défaut ci-dessous.
+                // On repart des valeurs par défaut ci-dessus.
             }
         }
 
-        // Par défaut, un fichier local de test — remplace par une vraie URL HTTPS servant
-        // current-modpack-launcher.json une fois le serveur accessible depuis l'extérieur.
-        modPackUrl = properties.getProperty("modpack_url", "file:./current-modpack-launcher.json");
-        serverAddress = properties.getProperty("server_address", "localhost");
+        modPackUrl = properties.getProperty("modpack_url");
+        serverAddress = properties.getProperty("server_address");
         serverPort = parseInt(properties.getProperty("server_port"), 25565);
-        username = properties.getProperty("username", "Player");
+        username = properties.getProperty("username");
         resolutionWidth = parseInt(properties.getProperty("resolution_width"), 1280);
         resolutionHeight = parseInt(properties.getProperty("resolution_height"), 720);
 
         save(); // garantit que le fichier existe avec toutes les clés, modifiable à la main
+    }
+
+    /**
+     * Ultime filet de sécurité si default-launcher.properties venait à manquer du JAR (ne devrait
+     * jamais arriver en pratique) : mieux vaut des valeurs de secours en dur ici, dans un seul
+     * endroit clairement identifié, que null propagé dans toute l'application.
+     */
+    private static Properties loadBundledDefaults() {
+        Properties defaults = new Properties();
+        try (InputStream in = LauncherConfig.class.getResourceAsStream(DEFAULTS_RESOURCE)) {
+            if (in != null) {
+                defaults.load(in);
+                return defaults;
+            }
+        } catch (IOException ignored) {
+            // Filet de sécurité ci-dessous.
+        }
+        defaults.setProperty("modpack_url", "file:./current-modpack-launcher.json");
+        defaults.setProperty("server_address", "localhost");
+        defaults.setProperty("server_port", "25565");
+        defaults.setProperty("username", "Player");
+        defaults.setProperty("resolution_width", "1280");
+        defaults.setProperty("resolution_height", "720");
+        return defaults;
     }
 
     public void save() {
