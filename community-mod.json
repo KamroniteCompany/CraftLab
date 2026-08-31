@@ -1,0 +1,8 @@
+{
+  "modId": "craftlabcore",
+  "name": "CraftLabCore",
+  "author": "OpenSourceDev",
+  "description": "Mod principal de CraftLab.",
+  "minecraftVersion": "1.21.1",
+  "loader": "forge"
+}
