@@ -110,6 +110,13 @@ rollback.
 - **NEXT absent** : rien ne se passe, CURRENT reste inchangé.
 - **NEXT invalide** (fichier manquant ou SHA-256 incorrect) : NEXT passe à `NOT_READY`,
   CURRENT n'est jamais touché, message d'erreur clair.
+- **Fichier cible verrouillé sous Windows (depuis 1.0.1)** : le jar de CraftLabCore
+  lui-même reste ouvert par la JVM tant que le serveur tourne (c'est son propre code qui
+  exécute `/modpack apply`), ce que Windows traduit par un refus de remplacement en place
+  (`AccessDeniedException`) — même si un redémarrage n'est jamais requis pour les autres
+  mods (voir plus haut). `ModFileReplacer` contourne ce cas précis : Windows autorise le
+  **renommage** d'un fichier ouvert même quand son remplacement de contenu est refusé, donc
+  l'ancien fichier est déplacé hors du chemin final avant que le nouveau n'y soit installé.
 
 ## Limitations actuelles (volontaires)
 

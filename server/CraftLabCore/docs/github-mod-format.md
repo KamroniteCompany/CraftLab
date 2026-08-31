@@ -81,3 +81,9 @@ C'est ensuite à un administrateur de décider de lancer une période de test :
 | Aucune release valide avec un `.jar`             | `Aucune release Forge 1.21.1 valide contenant un fichier .jar n'a été trouvée.` |
 | Plusieurs `.jar` dans la même release             | `La release ... contient plusieurs fichiers .jar : publiez-en un seul par release.` |
 | `modId` déjà utilisé par un autre mod              | `L'ID '...' est déjà utilisé par un autre mod enregistré.` |
+
+**Précision sur le conflit de `modId` (depuis 1.0.1).** Ce conflit n'est déclenché que si le
+mod existant a déjà une source GitHub **confirmée et différente**. Une entrée existante sans
+aucune source (par exemple `craftlabcore`, enregistré automatiquement au tout premier
+démarrage, jamais lié à GitHub) n'a jamais rien à protéger : l'importer l'autorise à se
+rattacher normalement au repository importé, exactement comme une mise à jour.

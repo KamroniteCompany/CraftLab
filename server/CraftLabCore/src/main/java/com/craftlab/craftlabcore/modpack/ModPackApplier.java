@@ -6,7 +6,6 @@ import net.minecraftforge.fml.loading.FMLPaths;
 import org.slf4j.Logger;
 
 import java.io.IOException;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -192,11 +191,7 @@ public final class ModPackApplier {
         for (ModPackEntry entry : toDeploy) {
             Path stagedFile = staged.get(entry.getModId());
             Path finalFile = modsDir.resolve(entry.getAssetName());
-            try {
-                Files.move(stagedFile, finalFile, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-            } catch (AtomicMoveNotSupportedException e) {
-                Files.move(stagedFile, finalFile, StandardCopyOption.REPLACE_EXISTING);
-            }
+            ModFileReplacer.moveIntoMods(stagedFile, finalFile);
         }
 
         // 4. Reconstruit le manifest pour refléter exactement NEXT (inchangés compris).

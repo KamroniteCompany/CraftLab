@@ -102,7 +102,7 @@ public final class GitHubModImporter {
         String modId = metadata.modId();
         Optional<ModDefinition> existing = ModRegistry.get().get(modId);
 
-        if (existing.isPresent() && !isSameGitHubSource(existing.get(), repository)) {
+        if (isConflict(existing, repository)) {
             return ImportResult.failure(ImportResult.Status.MOD_ID_CONFLICT,
                 "L'ID '" + modId + "' est déjà utilisé par un autre mod enregistré.");
         }
@@ -131,6 +131,17 @@ public final class GitHubModImporter {
         }
 
         return ImportResult.success(mod, updated);
+    }
+
+    /**
+     * Un conflit réel n'existe que si l'entrée existante a déjà une source GitHub CONFIRMÉE et
+     * différente (protège contre le hijack d'un modId déjà lié à un autre repository). Une entrée
+     * existante sans source (bootstrap de CraftLabCore, ou /mod register manuel) n'a jamais été
+     * liée à GitHub : rien à protéger, l'import doit pouvoir l'attacher. Pure — aucune dépendance
+     * à ModRegistry — pour rester testable indépendamment de tout environnement Forge/FML.
+     */
+    boolean isConflict(Optional<ModDefinition> existing, GitHubRepository repository) {
+        return existing.isPresent() && existing.get().getSource() != null && !isSameGitHubSource(existing.get(), repository);
     }
 
     private boolean isSameGitHubSource(ModDefinition existing, GitHubRepository repository) {
