@@ -47,12 +47,16 @@ public class ModDownloader {
 
     /** Vérifie le cache local, sans réseau : true si le fichier existe déjà avec le bon SHA-256. */
     public boolean isAlreadyValid(RemoteModEntry entry) {
-        Path file = targetPath(entry);
+        return matchesSha256(targetPath(entry), entry.sha256());
+    }
+
+    /** Vérifie qu'un fichier quelconque (cache ou installation active) correspond exactement au SHA-256 attendu. */
+    public boolean matchesSha256(Path file, String expectedSha256) {
         if (!Files.exists(file)) {
             return false;
         }
         try {
-            return entry.sha256() != null && entry.sha256().equalsIgnoreCase(sha256(file));
+            return expectedSha256 != null && expectedSha256.equalsIgnoreCase(sha256(file));
         } catch (IOException e) {
             return false;
         }

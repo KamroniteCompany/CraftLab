@@ -30,4 +30,10 @@ dependencies {
     // dépendance explicite : ce projet n'est plus un mod Forge, Gson n'est pas fourni
     // transitivement par Minecraft.
     implementation 'com.google.code.gson:gson:2.11.0'
+
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+}
+
+test {
+    useJUnitPlatform()
 }

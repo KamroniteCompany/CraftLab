@@ -32,6 +32,11 @@ public final class InstancePaths {
         return new InstancePaths(base);
     }
 
+    /** Pour les tests : pointe l'arborescence complète vers un répertoire arbitraire (ex. un dossier temporaire). */
+    public static InstancePaths at(Path root) {
+        return new InstancePaths(root);
+    }
+
     public Path root() {
         return root;
     }
