@@ -26,8 +26,9 @@ Il existe **deux** `ModPack` distincts, persistés séparément :
   ce fichier que `/modpack prepare`, `/modpack remove` et `/modpack sync` modifient.
 
 Le serveur continue de fonctionner normalement avec CURRENT pendant que NEXT se prépare en
-arrière-plan (téléchargements asynchrones). Faire passer NEXT → CURRENT puis redémarrer le
-serveur avec la nouvelle liste de mods est une **étape future distincte**, non couverte ici.
+arrière-plan (téléchargements asynchrones). Faire passer NEXT → CURRENT (`/modpack apply`) est
+une étape distincte, couverte en détail dans `docs/modpack-lifecycle.md` (staging, backup,
+rollback, redémarrage manuel requis).
 
 ## 3. Règle d'activation
 
@@ -114,13 +115,17 @@ ajouté, `-` retiré, `~` mis à jour) via `ModPackDiff`.
 ## 9. Limitations actuelles (volontaires)
 
 - Le serveur ne recharge **jamais** un mod à chaud.
-- NEXT n'est **jamais** appliqué automatiquement à CURRENT.
-- Aucun redémarrage automatique n'est déclenché.
-- Aucun launcher n'existe encore.
+- NEXT n'est **jamais** appliqué automatiquement à CURRENT : `/modpack apply` doit être
+  déclenché explicitement par un opérateur (voir `docs/modpack-lifecycle.md`).
+- Aucun redémarrage automatique du serveur n'est déclenché après `/modpack apply` — un
+  opérateur humain doit redémarrer pour que Forge charge le nouvel état.
 - Un mod `REJECTED` alors qu'il était dans NEXT en est retiré, mais son `.jar` déjà
-  téléchargé **n'est pas supprimé** : le serveur tourne peut-être encore avec un fichier
-  équivalent, et la suppression physique sera traitée dans une étape ultérieure dédiée à
-  l'application réelle du ModPack.
+  téléchargé **n'est pas supprimé** (cache conservé pour une réintroduction future).
+
+**Mise à jour (audit du 2026-08-31)** : le CraftLab Launcher (`launcher/CraftLabLauncher/`)
+existe désormais et consomme l'export de CURRENT (`current-modpack-launcher.json`, voir
+`LauncherModPackExporter`) pour synchroniser une instance Minecraft/Forge locale — voir
+`launcher/CraftLabLauncher/docs/launcher.md`.
 
 ## 10. Pourquoi pas de chargement à chaud ?
 

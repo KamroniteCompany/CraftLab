@@ -87,3 +87,20 @@ mod existant a déjà une source GitHub **confirmée et différente**. Une entr�
 aucune source (par exemple `craftlabcore`, enregistré automatiquement au tout premier
 démarrage, jamais lié à GitHub) n'a jamais rien à protéger : l'importer l'autorise à se
 rattacher normalement au repository importé, exactement comme une mise à jour.
+
+## 5. Vérifier toutes les nouvelles releases en une fois (`/mod github refresh`)
+
+Pour un mod déjà `ACCEPTED` et déjà rattaché à une source GitHub, il n'est pas nécessaire de
+retaper `/mod github import <url>` à chaque nouvelle release :
+
+```
+/mod github refresh
+```
+
+relance l'import pour **tous** les mods `ACCEPTED` déjà liés à GitHub d'un coup, et rapporte
+pour chacun `=` (déjà à jour), `~ ancienne → nouvelle` (mise à jour détectée dans le
+`ModRegistry`), ou une erreur individuelle (ex. GitHub temporairement inaccessible) sans faire
+échouer les autres mods. Cette commande s'arrête à la mise à jour du `ModRegistry` : elle ne
+prépare jamais `NEXT` ni ne promeut jamais `CURRENT` — ces décisions restent manuelles
+(`/modpack prepare`, `/modpack diff`, `/modpack apply`, voir `docs/modpack.md` et
+`docs/modpack-lifecycle.md`), pour ne jamais court-circuiter le vote communautaire.

@@ -31,11 +31,16 @@ définitive de mod cœur officiel de CraftLab : `CraftLabCore`.
   de template (`toncompte/CommunityTest`) jamais renseigné ; il pointe maintenant vers le vrai
   dépôt (`KamroniteCompany/CraftLab/issues`).
 - **Le ModPack (`current-modpack.json`/`next-modpack.json`/`current-modpack-launcher.json`)** :
-  `communitytest`/`craftlabcore` n'y a jamais figuré. Ce mod n'est pas distribué via le
-  mécanisme GitHub-release + SHA-256 du ModPack (contrairement à `blankmod`) : c'est le mod
-  cœur, installé manuellement dans `mods/` des deux côtés (serveur et instance du launcher),
-  au même titre que Forge lui-même. Aucune migration de ces fichiers n'était donc nécessaire
-  pour cette raison précise.
+  au moment du renommage, `communitytest`/`craftlabcore` n'y figurait pas encore — c'était
+  alors le mod cœur, installé manuellement dans `mods/` des deux côtés (serveur et instance
+  du launcher), au même titre que Forge lui-même. Aucune migration de ces fichiers n'était
+  donc nécessaire pour cette raison précise, à cette date.
+
+  **Mise à jour (CraftLabCore 1.0.1, audit du 2026-08-31)** : ce n'est plus le cas.
+  `craftlabcore` est désormais distribué exactement comme `blankmod`, via le mécanisme
+  GitHub-release + SHA-256 du ModPack (voir `docs/modpack.md` et `docs/modpack-lifecycle.md`) :
+  il figure dans `ModRegistry`, `current-modpack.json`, `next-modpack.json` et l'export
+  launcher au même titre que n'importe quel autre mod communautaire.
 
 ## Données migrées (hors dépôt Git)
 
@@ -50,8 +55,18 @@ Le serveur réellement déployé (hors du dépôt Git) possédait des données p
 - `managed-mods.json`, `modpack/current-modpack.json`, `modpack/next-modpack.json` — copiés
   tels quels : leur contenu ne mentionnait que `blankmod`, rien à changer.
 
-L'ancien dossier `config/communitytest/` est laissé intact sur le disque, comme sauvegarde,
-jusqu'à ce qu'il soit validé que tout fonctionne correctement avec `craftlabcore`.
+L'ancien dossier `config/communitytest/` avait été laissé intact sur le disque, comme
+sauvegarde, en attendant cette validation. **Mise à jour (audit du 2026-08-31)** : `craftlabcore`
+fonctionne correctement depuis longtemps et ce dossier a depuis été nettoyé — il n'existe plus
+sur le serveur réel.
+
+**Reliquat encore présent (audit du 2026-08-31)** : l'entrée `communitytest` elle-même existe
+toujours dans le `ModRegistry` réel (`config/craftlabcore/mods.json`), statut `TESTING`, avec
+une source GitHub pointant vers `KamroniteCompany/CraftLabCore` — un dépôt qui n'existe pas
+(le monorepo est `KamroniteCompany/CraftLab`). C'est un reliquat de données pré-migration, sans
+lien avec le mod `craftlabcore` réellement utilisé aujourd'hui ; il n'est jamais traité par
+`/mod github refresh` (qui ne touche que les mods `ACCEPTED`) et ne bloque rien. Sa suppression
+nécessite une décision explicite (voir le rapport d'audit) plutôt qu'un nettoyage automatique.
 
 ## Étapes manuelles restantes (hors du contrôle de ce dépôt)
 

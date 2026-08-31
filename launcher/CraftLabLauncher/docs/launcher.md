@@ -338,18 +338,23 @@ d'erreur clair dans le statut et le journal, aucun fichier `.part` résiduel dan
 Une fois `[ Jouer ]` activé, clique dessus. Attendu (journal) : ligne "Lancement : ...", un
 processus `java` démarre (vérifiable via le gestionnaire de tâches), Minecraft s'ouvre.
 
-**Test 9 — Connexion automatique, serveur disponible**
-Démarre le serveur CraftLab (`server_address`/`server_port` de `launcher.properties`), clique
-`[ Jouer ]`. Attendu : Minecraft passe directement de l'écran-titre à la connexion (log
-`ConnectScreen: Connecting to ...` puis `Connected to a modded server.`), sans passer par
-Multijoueur.
+**Test 9 — Connexion depuis l'écran CraftLab, serveur disponible**
+Démarre le serveur CraftLab (`server_address`/`server_port` de `launcher.properties`), lance le
+launcher. Minecraft démarre sur `CraftLabTitleScreen` **sans connexion automatique** (voir
+"Pas de connexion automatique" ci-dessus) ; clique toi-même sur le bouton **Jouer** de cet
+écran. Attendu : `ConnectScreen.startConnecting(...)` se déclenche (log `ConnectScreen:
+Connecting to ...` puis `Connected to a modded server.`), sans jamais passer par l'écran
+Multijoueur vanilla.
 
-**Test 10 — Connexion automatique, serveur indisponible**
-Arrête le serveur (ou pointe `server_port` vers un port fermé), clique `[ Jouer ]`. Attendu :
-avertissement dans le journal (`injoignable pour l'instant`), Minecraft démarre quand même et
-affiche `Couldn't connect to server` sans jamais rester bloqué.
+**Test 10 — Connexion depuis l'écran CraftLab, serveur indisponible**
+Arrête le serveur (ou pointe `server_port` vers un port fermé), clique **Jouer** sur
+`CraftLabTitleScreen`. Attendu : Minecraft affiche `Couldn't connect to server` proprement
+(mécanisme vanilla, avec son propre timeout), sans jamais rester bloqué — et sans que le
+launcher lui-même n'ait tenté quoi que ce soit.
 
 **Test 11 — Adresse configurable**
 Change `server_address`/`server_port` dans `launcher.properties`, relance, vérifie dans le
-journal que `Serveur cible: ...` et `--quickPlayMultiplayer ...` reflètent bien les nouvelles
-valeurs.
+journal que `Serveur configuré (utilisé par le bouton "Jouer" en jeu) : ...` reflète bien les
+nouvelles valeurs, et que la commande finale contient bien
+`-Dcraftlab.server.address=<adresse> -Dcraftlab.server.port=<port>` à jour (pas
+`--quickPlayMultiplayer`, retiré depuis que Quick Play a été abandonné — voir ci-dessus).
