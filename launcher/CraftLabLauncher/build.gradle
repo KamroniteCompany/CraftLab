@@ -21,6 +21,18 @@ application {
     mainClass = 'com.craftlab.launcher.CraftLabLauncherApp'
 }
 
+// Expose `version` (déclaré ci-dessus) via le manifeste du JAR, pour que AppVersion puisse le
+// lire à l'exécution (getClass().getPackage().getImplementationVersion()) au lieu qu'un numéro
+// de version soit recopié à la main quelque part dans le code.
+jar {
+    manifest {
+        attributes(
+            'Implementation-Title': 'CraftLab Launcher',
+            'Implementation-Version': project.version
+        )
+    }
+}
+
 repositories {
     mavenCentral()
 }

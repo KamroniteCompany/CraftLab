@@ -136,7 +136,7 @@ public class MinecraftLauncher {
         values.put("natives_directory", nativesDir.toAbsolutePath().toString());
         values.put("library_directory", paths.librariesDir().toAbsolutePath().toString());
         values.put("launcher_name", "CraftLabLauncher");
-        values.put("launcher_version", "0.1.0");
+        values.put("launcher_version", com.craftlab.launcher.AppVersion.current());
         values.put("classpath", classpath);
         values.put("resolution_width", String.valueOf(resolutionWidth));
         values.put("resolution_height", String.valueOf(resolutionHeight));
