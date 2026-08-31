@@ -272,26 +272,109 @@ Rien de ce qui est propre à une machine ou généré à l'exécution n'est vers
 - **`build/`, `.gradle/`** : sorties Gradle, régénérées par `gradlew.bat build` — ignorées par
   Git (voir `.gitignore` à la racine du dépôt).
 
-## Procédure d'installation Windows
+## Installeur Windows (`jpackageWindows`)
+
+**Mise à jour (audit du 2026-08-31) : cette section décrit la procédure réellement testée et
+fonctionnelle**, remplaçant l'exemple manuel précédent (jamais exécuté, avec une erreur de nom
+de jar). La tâche Gradle `jpackageWindows` (voir `build.gradle`) encapsule tout.
+
+### Prérequis (une seule fois par machine de build)
+
+`jpackage --type exe` génère l'installeur via WiX Toolset, qui n'est **pas** inclus dans le JDK :
+
+```powershell
+winget install --id WiXToolset.WiXToolset --source winget --accept-package-agreements --accept-source-agreements
+```
+
+Nécessite des privilèges administrateur (installe la fonctionnalité Windows .NET Framework 3.5).
+**Il faut spécifiquement WiX v3.x** (fournit `candle.exe`/`light.exe`, dans
+`C:\Program Files (x86)\WiX Toolset v3.14\bin`) — les versions v4/v5 exposent une CLI différente
+(`wix.exe`) que jpackage ne sait pas utiliser. Une fois installé, ajoute ce dossier au `PATH`
+(une session PowerShell déjà ouverte au moment de l'installation ne le voit pas automatiquement :
+ouvre une nouvelle session, ou ajoute-le manuellement pour la session courante).
+
+### Générer l'installeur
 
 ```powershell
 cd launcher/CraftLabLauncher
-./gradlew installDist
-jpackage `
-  --type exe `
-  --name "CraftLab Launcher" `
-  --app-version 0.1.0 `
-  --input build/install/craftlab-launcher/lib `
-  --main-jar craftlab-launcher.jar `
-  --main-class com.craftlab.launcher.CraftLabLauncherApp `
-  --dest build/dist `
-  --win-shortcut `
-  --win-menu
+./gradlew.bat jpackageWindows
 ```
-`jpackage` (inclus dans le JDK 21) embarque un JRE minimal : l'utilisateur final n'a pas
-besoin d'installer Java. La commande exacte peut nécessiter un ajustement selon la
-disposition réelle des JAR générés par `installDist` sur ta machine — vérifie
-`build/install/craftlab-launcher/lib` avant de lancer `jpackage`.
+
+Produit `build/jpackage/CraftLab Launcher-<version>.exe` (~63 Mo pour la 0.1.0). La tâche dépend
+automatiquement de `installDist` (rien d'autre à lancer avant).
+
+### Ce que fait `jpackageWindows`
+
+- Résout le binaire `jpackage` depuis le **toolchain Java 21** configuré (`java.toolchain`), pas
+  depuis un `jpackage` quelconque du `PATH` — important sur une machine qui a plusieurs JDK
+  installés (voir plus bas, `default JDK` de cette machine = 25.0.4).
+- `--input build/install/craftlab-launcher/lib` : réutilise directement la distribution produite
+  par `installDist` (jar du launcher + Gson + JavaFX pour Windows, déjà résolus par Gradle).
+- `--icon packaging/craftlab-launcher.ico` : voir "Icône" ci-dessous.
+- `--win-per-user-install` : installation par utilisateur (pas d'élévation admin requise pour
+  installer NI pour désinstaller), sous `%LOCALAPPDATA%\CraftLab Launcher\`.
+- `--win-shortcut --win-menu` : raccourci bureau + entrée dans le menu Démarrer.
+- `--win-upgrade-uuid` : UUID **fixe**, généré une seule fois (voir le commentaire dans
+  `build.gradle`) — ne jamais le régénérer, sous peine de casser la mise à jour en place pour les
+  utilisateurs d'une version antérieure (Windows verrait deux applications distinctes).
+
+### Icône
+
+`packaging/craftlab-launcher.ico` (256×256, format PNG embarqué dans un conteneur ICO minimal).
+**C'est un placeholder généré programmatiquement pour cette phase de test** (cercle vert + "C"
+sur fond sombre) — à remplacer par un vrai visuel avant toute distribution publique. Le
+`--icon` de `jpackageWindows` pointe vers ce fichier ; il suffit de le remplacer (même chemin,
+même nom) pour changer l'icône sans toucher au reste de la configuration.
+
+### JRE embarqué — état actuel et optimisation possible
+
+Le runtime embarqué est actuellement **le JDK 21 complet** (149 Mo décompressés), pas un runtime
+réduit : `jpackage` sans `--runtime-image` copie tel quel le JDK du toolchain, y compris des
+modules jamais utilisés par le launcher (`jdk.compiler`, `jdk.javadoc`, `jdk.jshell`,
+`jdk.jconsole`, `jdk.jdeps`, `jdk.jlink`, `jdk.jpackage` lui-même, les modules de debug JDI/JDWP,
+etc. — vérifié via `runtime/release` dans l'app-image générée). Un runtime `jlink` réduit aux
+modules réellement nécessaires (`java.base`, `java.desktop`, `java.logging`, `java.net.http`,
+`jdk.crypto.ec`, `jdk.crypto.mscapi`, `jdk.unsupported`, `jdk.zipfs`, + les modules JavaFX)
+réduirait probablement la taille de moitié ou plus. **Non fait dans cette phase** : le risque
+qu'une liste de modules incomplète casse silencieusement HTTPS (téléchargement des mods, du
+ModPack) ou le rendu JavaFX est réel, et sa vérification demanderait un second cycle complet
+d'installation/lancement réel — voir "Prochaines étapes" du rapport d'audit correspondant.
+
+### Vérifier le contenu sans installer (app-image)
+
+Pour inspecter la taille/le contenu sans passer par WiX ni par une vraie installation :
+
+```powershell
+jpackage --type app-image --name "CraftLab Launcher" --app-version 0.1.0 --vendor KamroniteCompany `
+  --icon packaging/craftlab-launcher.ico --input build/install/craftlab-launcher/lib `
+  --main-jar craftlab-launcher-0.1.0.jar --main-class com.craftlab.launcher.CraftLabLauncherApp `
+  --dest build/jpackage-appimage
+```
+
+Produit un dossier `CraftLab Launcher/` directement exécutable (`CraftLab Launcher.exe` à sa
+racine), utile pour un test rapide de lancement sans passer par un vrai cycle installation/
+désinstallation.
+
+### Reproductibilité depuis un clone propre
+
+```powershell
+git clone https://github.com/KamroniteCompany/CraftLab.git
+cd CraftLab/launcher/CraftLabLauncher
+./gradlew.bat jpackageWindows
+```
+
+Aucun état local requis au-delà de WiX (prérequis machine, pas dépôt) et du toolchain Java 21
+(Gradle le télécharge automatiquement si absent). Vérifié : build réussi depuis un état
+`./gradlew.bat clean` complet.
+
+### Désinstallation
+
+Via "Paramètres → Applications" ou le Panneau de configuration, comme n'importe quelle
+application Windows installée par utilisateur. Supprime les fichiers du launcher lui-même
+(`%LOCALAPPDATA%\CraftLab Launcher\`) — **ne touche jamais**
+`%APPDATA%\CraftLabLauncher\` (l'instance de jeu, les mods téléchargés, la configuration
+utilisateur), un dossier totalement distinct géré uniquement par le code du launcher lui-même,
+jamais par l'installeur/désinstalleur généré par jpackage.
 
 ## Procédure de test complète
 

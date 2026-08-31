@@ -18,7 +18,10 @@ javafx {
 }
 
 application {
-    mainClass = 'com.craftlab.launcher.CraftLabLauncherApp'
+    // Launcher, PAS CraftLabLauncherApp directement : voir la javadoc de Launcher pour la
+    // raison exacte (Main-Class ne doit jamais être un sous-type de javafx.application.Application
+    // pour un jar/exe packagé, sous peine de "Error: JavaFX runtime components are missing").
+    mainClass = 'com.craftlab.launcher.Launcher'
 }
 
 // Expose `version` (déclaré ci-dessus) via le manifeste du JAR, pour que AppVersion puisse le
@@ -28,9 +31,77 @@ jar {
     manifest {
         attributes(
             'Implementation-Title': 'CraftLab Launcher',
-            'Implementation-Version': project.version
+            'Implementation-Version': project.version,
+            // Launcher, PAS CraftLabLauncherApp : voir la javadoc de Launcher. Permet aussi
+            // `java -jar craftlab-launcher-X.Y.Z.jar` de fonctionner directement (à condition que
+            // les jars JavaFX/Gson soient sur le classpath, ex. via -cp en plus de -jar, puisque
+            // Class-Path n'est pas généré ici — utiliser installDist pour un lancement autonome).
+            'Main-Class': 'com.craftlab.launcher.Launcher'
         )
     }
+}
+
+// UUID fixe (généré une seule fois, le 2026-08-31) : jpackage/WiX s'en sert pour reconnaître
+// qu'une future installation est une MISE À JOUR de celle-ci, pas une application différente.
+// Ne JAMAIS le régénérer une fois un premier installeur distribué, sous peine de casser les
+// mises à jour en place pour les utilisateurs existants (ils se retrouveraient avec deux entrées
+// dans "Applications et fonctionnalités").
+ext.winUpgradeUuid = 'd28717a0-496b-49e4-a508-b8d8166c69f5'
+
+/**
+ * Produit un installeur Windows (.exe, via WiX/jpackage) qui embarque le runtime Java du JDK 21
+ * utilisé pour le build (aucune dépendance à un Java déjà installé chez le joueur). Dépend de
+ * installDist (tâche standard du plugin 'application') pour obtenir un dossier lib/ contenant
+ * le jar du launcher et toutes ses dépendances resolues (Gson, JavaFX pour l'OS courant) — c'est
+ * exactement le dossier attendu par jpackage en mode --input (application non modulaire).
+ */
+tasks.register('jpackageWindows', Exec) {
+    dependsOn tasks.named('installDist')
+    group = 'distribution'
+    description = 'Génère CraftLab-Launcher-<version>.exe (installeur Windows, JRE embarqué).'
+
+    def javaLauncher = javaToolchains.launcherFor(java.toolchain).get()
+    def javaHome = javaLauncher.metadata.installationPath.asFile
+    def jpackageExecutable = new File(javaHome, 'bin/jpackage.exe')
+    def libDir = layout.buildDirectory.dir('install/craftlab-launcher/lib')
+    def outputDir = layout.buildDirectory.dir('jpackage')
+    def iconFile = file('packaging/craftlab-launcher.ico')
+
+    inputs.dir(libDir)
+    inputs.file(iconFile)
+    outputs.dir(outputDir)
+
+    doFirst {
+        if (!jpackageExecutable.exists()) {
+            throw new GradleException("jpackage introuvable : ${jpackageExecutable}. "
+                + "Le toolchain Java 21 configuré doit être un JDK complet (jpackage n'existe pas dans un JRE seul).")
+        }
+        if (!iconFile.exists()) {
+            throw new GradleException("Icône introuvable : ${iconFile}.")
+        }
+        outputDir.get().asFile.mkdirs()
+    }
+
+    commandLine(
+        jpackageExecutable.absolutePath,
+        '--type', 'exe',
+        '--name', 'CraftLab Launcher',
+        '--app-version', project.version.toString(),
+        '--vendor', 'KamroniteCompany',
+        '--description', 'Launcher officiel du serveur CraftLab',
+        '--copyright', 'KamroniteCompany',
+        '--icon', iconFile.absolutePath,
+        '--input', libDir.get().asFile.absolutePath,
+        '--main-jar', "craftlab-launcher-${project.version}.jar",
+        // Launcher, PAS CraftLabLauncherApp : voir sa javadoc pour la raison exacte
+        // ("Error: JavaFX runtime components are missing" reproduit et corrigé le 2026-08-31).
+        '--main-class', 'com.craftlab.launcher.Launcher',
+        '--dest', outputDir.get().asFile.absolutePath,
+        '--win-shortcut',
+        '--win-menu',
+        '--win-per-user-install',
+        '--win-upgrade-uuid', winUpgradeUuid
+    )
 }
 
 repositories {
